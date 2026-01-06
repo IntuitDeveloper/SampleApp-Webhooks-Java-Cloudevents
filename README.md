@@ -173,7 +173,7 @@ Then open http://localhost:8080 and click "Connect to QuickBooks"
 
 ### Video Demo
 
-https://github.intuit.com/noneal/SampleApp-Webhooks-Java-CloudEvents/assets/86120/4ce381e7-f648-4529-9f8a-d98a9de8573d
+[https://github.intuit.com/noneal/SampleApp-Webhooks-Java-CloudEvents/assets/86120/4ce381e7-f648-4529-9f8a-d98a9de8573d](https://github.com/user-attachments/assets/87ee7cc8-2c20-48c0-ac11-2d04972afc82)
 
 Watch the complete application walkthrough above showing OAuth connection, webhook configuration, and real-time event monitoring.
 
