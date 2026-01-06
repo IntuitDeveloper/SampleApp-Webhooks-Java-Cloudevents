@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webhooks Dashboard - QuickBooks</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/quickbooks-1.svg}">
+    <link rel="stylesheet" th:href="@{/css/styles.css}">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div>
+                <h1>Webhooks Dashboard</h1>
+            </div>
+            <div>
+                <a th:href="@{/}" class="btn btn-secondary btn-sm">← Home</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Stats Dashboard -->
+        <div class="dashboard-grid">
+            <div class="stat-card">
+                <div class="stat-number" th:text="${webhookCount ?: 0}">0</div>
+                <div class="stat-label">Total Webhooks Received</div>
+            </div>
+            
+            <div class="stat-card" style="background: linear-gradient(135deg, #0077c5 0%, #005a9c 100%);">
+                <div class="stat-number" th:text="${todayCount ?: 0}">0</div>
+                <div class="stat-label">Webhooks Today</div>
+            </div>
+            
+        </div>
+
+        <!-- Status Message Alert -->
+        <div th:if="${message}" class="alert" th:classappend="${error != null and error ? 'alert-danger' : 'alert-success'}" style="margin-bottom: 20px;">
+            <span th:text="${message}"></span>
+        </div>
+
+        <!-- Recent Webhooks -->
+        <div class="card">
+            <div class="card-header">
+                Recent Webhook Events
+            </div>
+            
+            <!-- CloudEvents (SDK WebhooksCloudEvents) -->
+            <div th:if="${cloudEvents != null && !cloudEvents.isEmpty()}">
+                <div style="background: #e0f2fe; padding: 15px; margin: 20px 0; border-left: 4px solid #2563eb;">
+                    <strong style="color: #1e40af;">CloudEvents Format</strong> 
+                </div>
+                
+                <table class="webhooks-table">
+                    <thead>
+                        <tr>
+                            <th>Event ID</th>
+                            <th>Type</th>
+                            <th>Time</th>
+                            <th>Account ID</th>
+                            <th>Entity ID</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <th:block th:each="cloudEvent, iterStat : ${cloudEvents}">
+                            <tr>
+                                <td style="font-size: 11px; font-family: monospace;" th:text="${cloudEvent.id}">event-id</td>
+                                <td style="font-size: 11px; font-family: monospace; color: #2563eb;" th:text="${cloudEvent.type}">qbo.customer.created.v1</td>
+                                <td style="font-size: 12px;" th:text="${cloudEvent.time}">2025-12-03T10:00:00Z</td>
+                                <td style="font-size: 12px; font-family: monospace;" th:text="${cloudEvent.intuitAccountId}">123456</td>
+                                <td style="font-family: monospace;" th:text="${cloudEvent.intuitEntityId}">789</td>
+                                <td>
+                                    <a th:href="@{/webhooks/details/{index}(index=${iterStat.index})}" 
+                                       class="btn btn-sm btn-secondary" 
+                                       style="text-decoration: none;">
+                                        View Details →
+                                    </a>
+                                </td>
+                            </tr>
+                        </th:block>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Empty State -->
+            <div th:if="${cloudEvents == null || cloudEvents.isEmpty()}" class="empty-state">
+                <h3>No CloudEvents Webhooks Received Yet</h3>
+                <p>CloudEvents will appear here when QuickBooks sends notifications</p>
+                <div style="margin-top: 30px;">
+                    <h4 style="margin-bottom: 15px;">To receive webhooks:</h4>
+                    <ol style="text-align: left; display: inline-block; line-height: 2;">
+                        <li>Make sure your app is connected to QuickBooks</li>
+                        <li>Configure webhooks in <a href="https://developer.intuit.com" target="_blank">developer.intuit.com</a></li>
+                        <li>Set webhook URL to your public endpoint: <code>https://your-url/webhooks</code></li>
+                        <li>Create/update an entity in the QuickBooks UI or send a test webhook in the Intuit Developer Portal</li>
+                        <li>Watch webhooks will appear here</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manage Entities Section -->
+        <div class="card">
+            <div class="card-header">Manage QuickBooks Entities</div>
+            <div style="padding: 20px;">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Perform operations on QuickBooks entities to trigger webhook notifications.
+                </p>
+                
+                <!-- Customer Operations -->
+                <div style="margin-bottom: 25px;">
+                    <h3 style="font-size: 16px; margin-bottom: 10px; color: #333;">Customer Operations</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                        <button onclick="openModal('customerModal')" class="btn btn-primary" style="padding: 10px;">
+                            Create Customer
+                        </button>
+                        <button onclick="openModal('updateCustomerModal')" class="btn btn-primary" style="padding: 10px;">
+                            Update Customer
+                        </button>
+                        <button onclick="openModal('deleteCustomerModal')" class="btn btn-primary" style="padding: 10px;">
+                            Make Inactive
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Vendor Operations -->
+                <div style="margin-bottom: 25px;">
+                    <h3 style="font-size: 16px; margin-bottom: 10px; color: #333;">Vendor Operations</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                        <button onclick="openModal('vendorModal')" class="btn btn-primary" style="padding: 10px;">
+                            Create Vendor
+                        </button>
+                        <button onclick="openModal('updateVendorModal')" class="btn btn-primary" style="padding: 10px;">
+                            Update Vendor
+                        </button>
+                        <button onclick="openModal('deleteVendorModal')" class="btn btn-primary" style="padding: 10px;">
+                            Make Inactive
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Invoice Operations -->
+                <div style="margin-bottom: 25px;">
+                    <h3 style="font-size: 16px; margin-bottom: 10px; color: #333;">Invoice Operations</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                        <button onclick="openModal('invoiceModal')" class="btn btn-primary" style="padding: 10px;">
+                            Create Invoice
+                        </button>
+                        <button onclick="openModal('updateInvoiceModal')" class="btn btn-primary" style="padding: 10px;">
+                            Update Invoice
+                        </button>
+                        <button onclick="openModal('voidInvoiceModal')" class="btn btn-primary" style="padding: 10px;">
+                            Void Invoice
+                        </button>
+                        <button onclick="openModal('emailInvoiceModal')" class="btn btn-primary" style="padding: 10px;">
+                            Email Invoice
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Payment Operations -->
+                <div style="margin-bottom: 10px;">
+                    <h3 style="font-size: 16px; margin-bottom: 10px; color: #333;">Payment Operations</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                        <button onclick="openModal('paymentModal')" class="btn btn-primary" style="padding: 10px;">
+                            Create Payment
+                        </button>
+                        <button onclick="openModal('updatePaymentModal')" class="btn btn-primary" style="padding: 10px;">
+                            Update Payment
+                        </button>
+                        <button onclick="openModal('voidPaymentModal')" class="btn btn-primary" style="padding: 10px;">
+                            Void Payment
+                        </button>
+                        <button onclick="openModal('deletePaymentModal')" class="btn btn-primary" style="padding: 10px;">
+                            Delete Payment
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Bill Operations (Reports Optimization) -->
+                <div style="margin-bottom: 10px;">
+                    <h3 style="font-size: 16px; margin-bottom: 10px; color: #333;">
+                        Bill Operations 
+                        </span>
+                    </h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                        <button onclick="openModal('billModal')" class="btn btn-primary" style="padding: 10px;">
+                            Create Bill
+                        </button>
+                        <button onclick="openModal('updateBillModal')" class="btn btn-primary" style="padding: 10px;">
+                            Update Bill
+                        </button>
+                        <button onclick="openModal('deleteBillModal')" class="btn btn-primary" style="padding: 10px;">
+                            Delete Bill
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Journal Entry Operations (Reports Optimization) -->
+                <div style="margin-bottom: 10px;">
+                    <h3 style="font-size: 16px; margin-bottom: 10px; color: #333;">
+                        Journal Entry Operations 
+                        </span>
+                    </h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                        <button onclick="openModal('journalEntryModal')" class="btn btn-primary" style="padding: 10px;">
+                            Create Journal Entry
+                        </button>
+                        <button onclick="openModal('updateJournalEntryModal')" class="btn btn-primary" style="padding: 10px;">
+                            Update Journal Entry
+                        </button>
+                        <button onclick="openModal('deleteJournalEntryModal')" class="btn btn-primary" style="padding: 10px;">
+                            Delete Journal Entry
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Purchase (Expense) Operations (Reports Optimization) -->
+                <div style="margin-bottom: 10px;">
+                    <h3 style="font-size: 16px; margin-bottom: 10px; color: #333;">
+                        Purchase (Expense) Operations 
+                        </span>
+                    </h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                        <button onclick="openModal('purchaseModal')" class="btn btn-primary" style="padding: 10px;">
+                            Create Purchase
+                        </button>
+                        <button onclick="openModal('updatePurchaseModal')" class="btn btn-primary" style="padding: 10px;">
+                            Update Purchase
+                        </button>
+                        <button onclick="openModal('deletePurchaseModal')" class="btn btn-primary" style="padding: 10px;">
+                            Delete Purchase
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 QuickBooks Webhooks Demo</p>
+        </div>
+    </footer>
+
+    <!-- Status Message -->
+    <div id="statusMessage" class="status-message" style="display: none;"></div>
+
+    <!-- Customer Modal -->
+    <div id="customerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Customer</h2>
+                <span class="close" onclick="closeModal('customerModal')">&times;</span>
+            </div>
+            <form id="customerForm" onsubmit="submitCustomer(event)">
+                <button type="button" onclick="generateCustomer()" class="btn btn-secondary" style="width: 100%; margin-bottom: 20px;">
+                    Generate Test Customer
+                </button>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Display Name *</label>
+                        <input type="text" id="customerDisplayName" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>First Name *</label>
+                        <input type="text" id="customerGivenName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Last Name *</label>
+                        <input type="text" id="customerFamilyName" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="customerEmail">
+                    </div>
+                    <div class="form-group">
+                        <label>Phone</label>
+                        <input type="text" id="customerPhone">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Company</label>
+                        <input type="text" id="customerCompany">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Street Address</label>
+                        <input type="text" id="customerStreet">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>City</label>
+                        <input type="text" id="customerCity">
+                    </div>
+                    <div class="form-group">
+                        <label>State</label>
+                        <input type="text" id="customerState" maxlength="2">
+                    </div>
+                    <div class="form-group">
+                        <label>ZIP Code</label>
+                        <input type="text" id="customerZip">
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('customerModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Customer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Update Customer Modal -->
+    <div id="updateCustomerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Update Customer</h2>
+                <span class="close" onclick="closeModal('updateCustomerModal')">&times;</span>
+            </div>
+            <form id="updateCustomerForm" onsubmit="submitUpdateCustomer(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Customer *</label>
+                        <select id="updateCustomerId" required onchange="onCustomerSelectForUpdate()">
+                            <option value="">Loading customers...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Display Name</label>
+                        <input type="text" id="updateCustomerDisplayName">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>First Name</label>
+                        <input type="text" id="updateCustomerGivenName">
+                    </div>
+                    <div class="form-group">
+                        <label>Last Name</label>
+                        <input type="text" id="updateCustomerFamilyName">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="updateCustomerEmail">
+                    </div>
+                    <div class="form-group">
+                        <label>Phone</label>
+                        <input type="text" id="updateCustomerPhone">
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('updateCustomerModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Customer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Customer Modal -->
+    <div id="deleteCustomerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Make Customer Inactive</h2>
+                <span class="close" onclick="closeModal('deleteCustomerModal')">&times;</span>
+            </div>
+            <form id="deleteCustomerForm" onsubmit="submitDeleteCustomer(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Select a customer to make inactive. QuickBooks does not support deleting customers, so this will mark the customer as inactive. This action will trigger a webhook notification.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Customer *</label>
+                        <select id="deleteCustomerId" required>
+                            <option value="">Loading customers...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('deleteCustomerModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #dc3545;">Make Inactive</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Update Vendor Modal -->
+    <div id="updateVendorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Update Vendor</h2>
+                <span class="close" onclick="closeModal('updateVendorModal')">&times;</span>
+            </div>
+            <form id="updateVendorForm" onsubmit="submitUpdateVendor(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Vendor *</label>
+                        <select id="updateVendorId" required onchange="onVendorSelectForUpdate()">
+                            <option value="">Loading vendors...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Display Name</label>
+                        <input type="text" id="updateVendorDisplayName">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Company Name</label>
+                        <input type="text" id="updateVendorCompanyName">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>First Name</label>
+                        <input type="text" id="updateVendorGivenName">
+                    </div>
+                    <div class="form-group">
+                        <label>Last Name</label>
+                        <input type="text" id="updateVendorFamilyName">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="updateVendorEmail">
+                    </div>
+                    <div class="form-group">
+                        <label>Phone</label>
+                        <input type="text" id="updateVendorPhone">
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('updateVendorModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, #fd7e14 0%, #e0690d 100%);">Update Vendor</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Vendor Modal -->
+    <div id="deleteVendorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Make Vendor Inactive</h2>
+                <span class="close" onclick="closeModal('deleteVendorModal')">&times;</span>
+            </div>
+            <form id="deleteVendorForm" onsubmit="submitDeleteVendor(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Select a vendor to make inactive. QuickBooks does not support deleting vendors, so this will mark the vendor as inactive. This action will trigger a webhook notification.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Vendor *</label>
+                        <select id="deleteVendorId" required>
+                            <option value="">Loading vendors...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('deleteVendorModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #dc3545;">Make Inactive</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Vendor Modal -->
+    <div id="vendorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Vendor</h2>
+                <span class="close" onclick="closeModal('vendorModal')">&times;</span>
+            </div>
+            <form id="vendorForm" onsubmit="submitVendor(event)">
+                <button type="button" onclick="generateVendor()" class="btn btn-secondary" style="width: 100%; margin-bottom: 20px;">
+                    Generate Test Vendor
+                </button>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Display Name *</label>
+                        <input type="text" id="vendorDisplayName" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Company Name</label>
+                        <input type="text" id="vendorCompanyName">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Contact First Name</label>
+                        <input type="text" id="vendorGivenName">
+                    </div>
+                    <div class="form-group">
+                        <label>Contact Last Name</label>
+                        <input type="text" id="vendorFamilyName">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="vendorEmail">
+                    </div>
+                    <div class="form-group">
+                        <label>Phone</label>
+                        <input type="text" id="vendorPhone">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Street Address</label>
+                        <input type="text" id="vendorStreet">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>City</label>
+                        <input type="text" id="vendorCity">
+                    </div>
+                    <div class="form-group">
+                        <label>State</label>
+                        <input type="text" id="vendorState" maxlength="2">
+                    </div>
+                    <div class="form-group">
+                        <label>ZIP Code</label>
+                        <input type="text" id="vendorZip">
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('vendorModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, #fd7e14 0%, #e0690d 100%);">Create Vendor</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Invoice Modal -->
+    <div id="invoiceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Invoice</h2>
+                <span class="close" onclick="closeModal('invoiceModal')">&times;</span>
+            </div>
+            <form id="invoiceForm" onsubmit="submitInvoice(event)">
+                <button type="button" onclick="generateInvoice()" class="btn btn-secondary" style="width: 100%; margin-bottom: 20px;">
+                    Generate Test Invoice Data
+                </button>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Customer *</label>
+                        <select id="invoiceCustomer" required>
+                            <option value="">Loading customers...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <h3 style="margin-top: 20px; margin-bottom: 15px; font-size: 16px; color: #333;">Line Item</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Description *</label>
+                        <input type="text" id="invoiceDescription" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Quantity *</label>
+                        <input type="number" id="invoiceQuantity" min="1" value="1" required onchange="updateInvoiceAmount()">
+                    </div>
+                    <div class="form-group">
+                        <label>Rate ($) *</label>
+                        <input type="number" id="invoiceRate" step="0.01" min="0" required onchange="updateInvoiceAmount()">
+                    </div>
+                    <div class="form-group">
+                        <label>Amount</label>
+                        <div style="padding: 10px; background: #f8f9fa; border-radius: 4px; font-weight: 600; font-size: 16px;">
+                            <span id="invoiceAmount">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('invoiceModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);">Create Invoice</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Update Invoice Modal -->
+    <div id="updateInvoiceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Update Invoice</h2>
+                <span class="close" onclick="closeModal('updateInvoiceModal')">&times;</span>
+            </div>
+            <form id="updateInvoiceForm" onsubmit="submitUpdateInvoice(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Invoice *</label>
+                        <select id="updateInvoiceId" required>
+                            <option value="">Loading invoices...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <h3 style="margin-top: 20px; margin-bottom: 15px; font-size: 16px; color: #333;">Update Line Item</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="updateInvoiceDescription">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" id="updateInvoiceQuantity" min="1" value="1" onchange="updateInvoiceAmount()">
+                    </div>
+                    <div class="form-group">
+                        <label>Rate ($)</label>
+                        <input type="number" id="updateInvoiceRate" step="0.01" min="0" onchange="updateInvoiceAmount()">
+                    </div>
+                    <div class="form-group">
+                        <label>Amount</label>
+                        <div style="padding: 10px; background: #f8f9fa; border-radius: 4px; font-weight: 600; font-size: 16px;">
+                            <span id="updateInvoiceAmount">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('updateInvoiceModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);">Update Invoice</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Void Invoice Modal -->
+    <div id="voidInvoiceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Void Invoice</h2>
+                <span class="close" onclick="closeModal('voidInvoiceModal')">&times;</span>
+            </div>
+            <form id="voidInvoiceForm" onsubmit="submitVoidInvoice(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Select an invoice to void. Voiding an invoice marks it as cancelled and triggers a webhook notification.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Invoice *</label>
+                        <select id="voidInvoiceId" required>
+                            <option value="">Loading invoices...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('voidInvoiceModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #dc3545;">Void Invoice</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Email Invoice Modal -->
+    <div id="emailInvoiceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Email Invoice</h2>
+                <span class="close" onclick="closeModal('emailInvoiceModal')">&times;</span>
+            </div>
+            <form id="emailInvoiceForm" onsubmit="submitEmailInvoice(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Select an invoice to email. This will send the invoice to the specified email address and trigger a webhook notification.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Invoice *</label>
+                        <select id="emailInvoiceId" required>
+                            <option value="">Loading invoices...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email To *</label>
+                        <input type="email" id="emailInvoiceTo" required placeholder="customer@example.com">
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('emailInvoiceModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);">Email Invoice</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div id="paymentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Record Payment</h2>
+                <span class="close" onclick="closeModal('paymentModal')">&times;</span>
+            </div>
+            <form id="paymentForm" onsubmit="submitPayment(event)">
+                <button type="button" onclick="generatePayment()" class="btn btn-secondary" style="width: 100%; margin-bottom: 20px;">
+                    Generate Test Payment Data
+                </button>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Customer *</label>
+                        <select id="paymentCustomer" required onchange="loadInvoicesForPayment()">
+                            <option value="">Loading customers...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Invoice (Optional)</label>
+                        <select id="paymentInvoice">
+                            <option value="">Select customer first...</option>
+                        </select>
+                        <small style="color: #666; font-size: 12px;">Leave blank for unapplied payment</small>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Payment Amount ($) *</label>
+                        <input type="number" id="paymentAmount" step="0.01" min="0.01" required>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('paymentModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, #17a2b8 0%, #117a8b 100%);">Record Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Update Payment Modal -->
+    <div id="updatePaymentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Update Payment</h2>
+                <span class="close" onclick="closeModal('updatePaymentModal')">&times;</span>
+            </div>
+            <form id="updatePaymentForm" onsubmit="submitUpdatePayment(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Payment *</label>
+                        <select id="updatePaymentId" required>
+                            <option value="">Loading payments...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Payment Amount ($) *</label>
+                        <input type="number" id="updatePaymentAmount" step="0.01" min="0.01" required>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('updatePaymentModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, #17a2b8 0%, #117a8b 100%);">Update Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Void Payment Modal -->
+    <div id="voidPaymentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Void Payment</h2>
+                <span class="close" onclick="closeModal('voidPaymentModal')">&times;</span>
+            </div>
+            <form id="voidPaymentForm" onsubmit="submitVoidPayment(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Select a payment to void. Voiding a payment cancels it and triggers a webhook notification.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Payment *</label>
+                        <select id="voidPaymentId" required>
+                            <option value="">Loading payments...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('voidPaymentModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #dc3545;">Void Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Payment Modal -->
+    <div id="deletePaymentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Delete Payment</h2>
+                <span class="close" onclick="closeModal('deletePaymentModal')">&times;</span>
+            </div>
+            <form id="deletePaymentForm" onsubmit="submitDeletePayment(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Select a payment to delete. This action permanently removes the payment and triggers a webhook notification.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Payment *</label>
+                        <select id="deletePaymentId" required>
+                            <option value="">Loading payments...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('deletePaymentModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #dc3545;">Delete Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Bill Modal -->
+    <div id="billModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Bill</h2>
+                <span class="close" onclick="closeModal('billModal')">&times;</span>
+            </div>
+            <form id="billForm" onsubmit="submitBill(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Create a new bill. This triggers webhooks for Aged Payables, P&L, and Balance Sheet reports.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Vendor *</label>
+                        <select id="billVendorId" required>
+                            <option value="">Select Vendor</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Amount *</label>
+                        <input type="number" id="billAmount" step="0.01" min="0.01" required placeholder="100.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Expense Account *</label>
+                        <select id="billExpenseAccountId" required>
+                            <option value="">Select Expense Account</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="billDescription" placeholder="Office supplies">
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('billModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #dc3545;">Create Bill</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Update Bill Modal -->
+    <div id="updateBillModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Update Bill</h2>
+                <span class="close" onclick="closeModal('updateBillModal')">&times;</span>
+            </div>
+            <form id="updateBillForm" onsubmit="submitUpdateBill(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Select a bill to update. Triggers webhooks for Aged Payables, P&L, and Balance Sheet.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Bill *</label>
+                        <select id="updateBillId" required onchange="onBillSelectForUpdate()">
+                            <option value="">Select a bill...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>New Amount *</label>
+                        <input type="number" id="updateBillAmount" step="0.01" min="0.01" required placeholder="150.00">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>New Description</label>
+                        <input type="text" id="updateBillDescription" placeholder="Updated description">
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('updateBillModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #dc3545;">Update Bill</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Bill Modal -->
+    <div id="deleteBillModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Delete Bill</h2>
+                <span class="close" onclick="closeModal('deleteBillModal')">&times;</span>
+            </div>
+            <form id="deleteBillForm" onsubmit="submitDeleteBill(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Select a bill to delete. Triggers webhooks for Aged Payables, P&L, and Balance Sheet.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Bill *</label>
+                        <select id="deleteBillId" required>
+                            <option value="">Select a bill...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('deleteBillModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #dc3545;">Delete Bill</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Journal Entry Modal -->
+    <div id="journalEntryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Journal Entry</h2>
+                <span class="close" onclick="closeModal('journalEntryModal')">&times;</span>
+            </div>
+            <form id="journalEntryForm" onsubmit="submitJournalEntry(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Create a journal entry with debit and credit accounts. Triggers webhooks for P&L and Balance Sheet.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Amount *</label>
+                        <input type="number" id="jeAmount" step="0.01" placeholder="Enter amount" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="jeDescription" placeholder="Enter description">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Debit Account ID *</label>
+                        <select id="jeDebitAccountId" required>
+                            <option value="">Select debit account...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Credit Account ID *</label>
+                        <select id="jeCreditAccountId" required>
+                            <option value="">Select credit account...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('journalEntryModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #8b5cf6;">Create Journal Entry</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Update Journal Entry Modal -->
+    <div id="updateJournalEntryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Update Journal Entry</h2>
+                <span class="close" onclick="closeModal('updateJournalEntryModal')">&times;</span>
+            </div>
+            <form id="updateJournalEntryForm" onsubmit="submitUpdateJournalEntry(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Update an existing journal entry. Triggers webhooks for P&L and Balance Sheet.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Journal Entry *</label>
+                        <select id="updateJournalEntryId" onchange="onJournalEntrySelectForUpdate(this.value)" required>
+                            <option value="">Select a journal entry...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>New Amount *</label>
+                        <input type="number" id="updateJeAmount" step="0.01" placeholder="Enter new amount" required>
+                    </div>
+                    <div class="form-group">
+                        <label>New Description</label>
+                        <input type="text" id="updateJeDescription" placeholder="Enter new description">
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('updateJournalEntryModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #8b5cf6;">Update Journal Entry</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Journal Entry Modal -->
+    <div id="deleteJournalEntryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Delete Journal Entry</h2>
+                <span class="close" onclick="closeModal('deleteJournalEntryModal')">&times;</span>
+            </div>
+            <form id="deleteJournalEntryForm" onsubmit="submitDeleteJournalEntry(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Select a journal entry to delete. Triggers webhooks for P&L and Balance Sheet.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Journal Entry *</label>
+                        <select id="deleteJournalEntryId" required>
+                            <option value="">Select a journal entry...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('deleteJournalEntryModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #8b5cf6;">Delete Journal Entry</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Purchase Modal -->
+    <div id="purchaseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Purchase (Expense)</h2>
+                <span class="close" onclick="closeModal('purchaseModal')">&times;</span>
+            </div>
+            <form id="purchaseForm" onsubmit="submitPurchase(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Create a cash purchase/expense. Triggers webhooks for P&L and Balance Sheet.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Amount *</label>
+                        <input type="number" id="purchaseAmount" step="0.01" placeholder="Enter amount" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="purchaseDescription" placeholder="Enter description">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Expense Account *</label>
+                        <select id="purchaseAccountId" required>
+                            <option value="">Select expense account...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Vendor (Optional)</label>
+                        <select id="purchaseVendorId">
+                            <option value="">Select vendor (optional)...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('purchaseModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #10b981;">Create Purchase</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Update Purchase Modal -->
+    <div id="updatePurchaseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Update Purchase</h2>
+                <span class="close" onclick="closeModal('updatePurchaseModal')">&times;</span>
+            </div>
+            <form id="updatePurchaseForm" onsubmit="submitUpdatePurchase(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Update an existing purchase. Triggers webhooks for P&L and Balance Sheet.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Purchase *</label>
+                        <select id="updatePurchaseId" onchange="onPurchaseSelectForUpdate(this.value)" required>
+                            <option value="">Select a purchase...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>New Amount *</label>
+                        <input type="number" id="updatePurchaseAmount" step="0.01" placeholder="Enter new amount" required>
+                    </div>
+                    <div class="form-group">
+                        <label>New Description</label>
+                        <input type="text" id="updatePurchaseDescription" placeholder="Enter new description">
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('updatePurchaseModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #10b981;">Update Purchase</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Purchase Modal -->
+    <div id="deletePurchaseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Delete Purchase</h2>
+                <span class="close" onclick="closeModal('deletePurchaseModal')">&times;</span>
+            </div>
+            <form id="deletePurchaseForm" onsubmit="submitDeletePurchase(event)">
+                <p style="margin-bottom: 20px; color: #666;">
+                    Select a purchase to delete. Triggers webhooks for P&L and Balance Sheet.
+                </p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Select Purchase *</label>
+                        <select id="deletePurchaseId" required>
+                            <option value="">Select a purchase...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" onclick="closeModal('deletePurchaseModal')" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background: #10b981;">Delete Purchase</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <style>
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .close {
+            font-size: 28px;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+            line-height: 20px;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        .modal-content form {
+            padding: 20px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .form-group label {
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #0077c5;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .status-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 4px;
+            font-weight: 600;
+            z-index: 2000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 400px;
+        }
+
+        .status-message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                flex-direction: column;
+            }
+        }
+    </style>
+
+    <style>
+        .alert {
+            padding: 15px 20px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+
+    <script>
+        function togglePayload(id) {
+            var payload = document.getElementById('payload-' + id);
+            if (payload.style.display === 'none' || payload.style.display === '') {
+                payload.style.display = 'table-row';
+            } else {
+                payload.style.display = 'none';
+            }
+        }
+        
+        function toggleCDCDetails(id) {
+            var details = document.getElementById('cdc-details-' + id);
+            if (details.style.display === 'none') {
+                details.style.display = 'block';
+            } else {
+                details.style.display = 'none';
+            }
+        }
+        
+        // Load customers when invoice modal opens
+        document.addEventListener('DOMContentLoaded', function() {
+            const invoiceBtn = document.querySelector('button[onclick="openModal(\'invoiceModal\')"]');
+            if (invoiceBtn) {
+                invoiceBtn.addEventListener('click', function() {
+                    loadCustomers();
+                });
+            }
+        });
+    </script>
+    <script src="/js/entity-modals.js"></script>
+    
+    <!-- Auto-refresh for webhooks (only when safe to refresh) -->
+    <script>
+        let lastInteractionTime = Date.now();
+        
+        // Track user interactions to prevent refresh during active use
+        document.addEventListener('click', function() {
+            lastInteractionTime = Date.now();
+        });
+        
+        document.addEventListener('input', function() {
+            lastInteractionTime = Date.now();
+        });
+        
+        // Auto-refresh every 10 seconds (reduced frequency)
+        // Only refresh if user hasn't interacted recently and no modals are open
+        setInterval(function() {
+            // Don't refresh if user has interacted in the last 10 seconds
+            const timeSinceInteraction = Date.now() - lastInteractionTime;
+            if (timeSinceInteraction < 10000) {
+                return; // Skip refresh, user is actively working
+            }
+            
+            // Check if any modal is open or visible
+            const modals = document.querySelectorAll('.modal');
+            let modalOpen = false;
+            modals.forEach(modal => {
+                const computedStyle = window.getComputedStyle(modal);
+                if (modal.style.display === 'block' || computedStyle.display === 'block') {
+                    modalOpen = true;
+                }
+            });
+            
+            // Check if any select dropdown is open
+            const selectElements = document.querySelectorAll('select');
+            let selectOpen = false;
+            selectElements.forEach(select => {
+                if (document.activeElement === select) {
+                    selectOpen = true;
+                }
+            });
+            
+            // Only reload if safe: no modals, no dropdowns, no recent interaction
+            if (!modalOpen && !selectOpen) {
+                location.reload();
+            }
+        }, 10000); // 10 seconds (less aggressive)
+    </script>
+</body>
+</html>

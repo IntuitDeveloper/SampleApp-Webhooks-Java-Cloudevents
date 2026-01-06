@@ -1,0 +1,124 @@
+plugins {
+    id 'java'
+    id 'jacoco'
+    id 'org.springframework.boot' version '4.0.0'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+// Add Spring milestone and snapshot repositories for Spring Boot 4.0.0
+repositories {
+    mavenCentral()
+    maven { url 'https://repo.spring.io/milestone' }
+    maven { url 'https://repo.spring.io/snapshot' }
+}
+
+jar {
+    archiveBaseName = 'sample-app-webhooks-java'
+    archiveVersion = '0.1.0'
+    enabled = false
+}
+
+bootJar {
+    archiveBaseName = 'sample-app-webhooks-java'
+    archiveVersion = '0.1.0'
+}
+
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+dependencies {
+    // QuickBooks SDK 6.5.2 - Has WebhooksCloudEvents class
+    implementation("com.intuit.quickbooks-online:ipp-v3-java-data:6.5.2")
+    implementation("com.intuit.quickbooks-online:ipp-v3-java-devkit:6.5.2")
+    implementation("com.intuit.quickbooks-online:oauth2-platform-api:6.5.2")
+    
+    // Fix for commons-lang3 dependency conflict with SDK
+    implementation("org.apache.commons:commons-lang3:3.17.0")
+    
+    // Spring Boot Starters
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    
+    // Frontend - Thymeleaf template engine
+    implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
+    
+    // Session management for OAuth tokens - using default servlet session
+    // Note: spring-session-core alone doesn't work, removed to use default HttpSession
+    
+    // Jackson for JSON processing
+    implementation("com.fasterxml.jackson.core:jackson-databind")
+    
+    // Jakarta Validation (Bean Validation) - For @NotBlank, @Pattern, @Size annotations
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    
+    // Jakarta XML Bind (JAXB) - Required for Spring Boot 3 / Java 17+
+    implementation("jakarta.xml.bind:jakarta.xml.bind-api:4.0.0")
+    implementation("org.glassfish.jaxb:jaxb-runtime:4.0.3")
+    
+    // Backwards compatibility: Old javax.xml.bind for legacy libraries
+    // (QuickBooks SDK and older Jackson modules still reference javax)
+    implementation("javax.xml.bind:jaxb-api:2.3.1")
+    
+    // Configuration processor for @ConfigurationProperties metadata
+    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
+    
+    // dotenv - Load .env file for environment variables
+    implementation("io.github.cdimascio:dotenv-java:3.0.0")
+    
+    // Gson - JSON parsing for CloudEvents webhooks
+    implementation("com.google.code.gson:gson:2.10.1")
+    
+    // Testing
+    testImplementation("org.springframework.boot:spring-boot-starter-test") {
+        exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
+    }
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation("org.mockito:mockito-core:4.11.0")
+    testImplementation("org.hamcrest:hamcrest:2.2")
+}
+
+test {
+    useJUnitPlatform()
+    finalizedBy jacocoTestReport
+}
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/Application.class',
+                '**/config/**',
+                '**/domain/**'
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.80
+            }
+        }
+    }
+}
+
+tasks.wrapper {
+    gradleVersion = '8.14'
+    distributionType = Wrapper.DistributionType.ALL
+}
