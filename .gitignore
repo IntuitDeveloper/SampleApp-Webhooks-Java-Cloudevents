@@ -33,3 +33,6 @@ set_env.sh
 
 # Personal notes and summaries
 misc/
+
+# Generated prompt files (contain resolved config values)
+webhooks-cloudevents/ready-prompt.md

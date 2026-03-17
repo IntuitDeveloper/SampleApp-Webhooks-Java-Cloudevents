@@ -1,0 +1,19 @@
+{
+  "language_framework": "Java 21 / Spring Boot",
+  "build_tool": "Gradle",
+  "sdk_source": "https://github.com/intuit/QuickBooks-V3-Java-SDK",
+  "sdk_minimum_version": "6.5.2",
+  "sdk_cloudevents_class": "WebhooksCloudEvents",
+  "sdk_data_package": "com.intuit.ipp.data",
+  "sdk_service_package": "com.intuit.ipp.services",
+  "webhooks_payload_change_blog": "https://blogs.intuit.com/2025/11/12/upcoming-change-to-webhooks-payload-structure/",
+  "enhanced_webhooks_monitoring": "https://medium.com/intuitdev/introducing-enhanced-webhooks-monitoring-e29088948b0b",
+  "cloudevents_spec": "https://cloudevents.io/",
+  "developer_portal_url": "https://developer.intuit.com",
+  "webhooks_documentation": "https://developer.intuit.com/app/developer/qbo/docs/develop/webhooks",
+  "typing_system": "Java classes/records",
+  "content_type_fix": "Remove `consumes` from `@RequestMapping` / `@PostMapping`, or explicitly add both: `consumes = {\"application/json\", \"application/cloudevents+json\"}`",
+  "signature_header": "intuit-signature",
+  "signature_algorithm": "HMAC-SHA256",
+  "verifier_token_config_key": "quickbooks.webhooks-verifier-token"
+}

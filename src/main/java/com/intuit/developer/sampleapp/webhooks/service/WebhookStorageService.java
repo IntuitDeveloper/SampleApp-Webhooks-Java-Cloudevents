@@ -71,8 +71,7 @@ public class WebhookStorageService {
             // Re-throw validation exceptions
             throw e;
         } catch (Exception e) {
-            LOG.error("Failed to parse and store webhook: {}", e.getMessage(), e);
-            throw new RuntimeException("Error processing webhook payload", e);
+            LOG.error("Failed to parse and store webhook (non-fatal): {}", e.getMessage(), e);
         }
     }
     

@@ -77,7 +77,7 @@ public class WebhooksController {
 	    	LOG.info("Payload length: {} characters", payload.length());
 	    	LOG.info("Payload preview: {}", payload.substring(0, Math.min(300, payload.length())));
 	    	LOG.info("Signature header: {}", signature);
-	    	LOG.info("Verifier token configured: {}", getVerifierToken());
+	    	LOG.info("Verifier token configured: {}", getVerifierToken() != null ? "***" : "NULL");
 			
 			LOG.info("Starting signature validation...");
 			//if request valid - process webhook
@@ -99,8 +99,8 @@ public class WebhooksController {
 	    	return new ResponseEntity<>(new ResponseWrapper(SUCCESS), HttpStatus.OK);
 	    	
     	} catch (Exception e) {
-    		LOG.error("💥 ERROR processing webhook: " + e.getMessage(), e);
-    		return new ResponseEntity<>(new ResponseWrapper(ERROR), HttpStatus.INTERNAL_SERVER_ERROR);
+    		LOG.error("Error processing webhook (returning 200 to prevent retry): {}", e.getMessage(), e);
+    		return new ResponseEntity<>(new ResponseWrapper(SUCCESS), HttpStatus.OK);
     	}
     }
     
