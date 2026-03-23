@@ -31,10 +31,10 @@ java {
 }
 
 dependencies {
-    // QuickBooks SDK 6.5.2 - Has WebhooksCloudEvents class
-    implementation("com.intuit.quickbooks-online:ipp-v3-java-data:6.5.2")
-    implementation("com.intuit.quickbooks-online:ipp-v3-java-devkit:6.5.2")
-    implementation("com.intuit.quickbooks-online:oauth2-platform-api:6.5.2")
+    // QuickBooks SDK 6.7.0 (latest) - Note: hard-expiration header NOT yet in SDK
+    implementation("com.intuit.quickbooks-online:ipp-v3-java-data:6.7.0")
+    implementation("com.intuit.quickbooks-online:ipp-v3-java-devkit:6.7.0")
+    implementation("com.intuit.quickbooks-online:oauth2-platform-api:6.7.0")
     
     // Fix for commons-lang3 dependency conflict with SDK
     implementation("org.apache.commons:commons-lang3:3.17.0")

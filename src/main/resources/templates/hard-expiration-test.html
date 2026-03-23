@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refresh Token Hard Expiration — Test Harness</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/quickbooks-1.svg}">
+    <link rel="stylesheet" th:href="@{/css/styles.css}">
+    <style>
+        .test-step { margin-bottom: 30px; }
+        .step-header {
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 20px; border-radius: 8px 8px 0 0;
+            color: white; font-weight: 600; font-size: 16px;
+        }
+        .step-header.step-1 { background: var(--qb-blue); }
+        .step-header.step-2 { background: #6f42c1; }
+        .step-header.step-3 { background: #e83e8c; }
+        .step-header.step-4 { background: #fd7e14; }
+        .step-body {
+            border: 1px solid var(--qb-border); border-top: none;
+            border-radius: 0 0 8px 8px; padding: 20px;
+            background: white;
+        }
+        .step-number {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px; border-radius: 50%;
+            background: rgba(255,255,255,0.25); font-size: 15px;
+        }
+        .result-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+        .result-table th { text-align: left; padding: 8px 12px; background: var(--qb-light-gray); font-size: 13px; }
+        .result-table td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+        .badge-pass { background: #d4edda; color: #155724; padding: 3px 10px; border-radius: 4px; font-weight: 600; font-size: 12px; }
+        .badge-fail { background: #f8d7da; color: #721c24; padding: 3px 10px; border-radius: 4px; font-weight: 600; font-size: 12px; }
+        .badge-warn { background: #fff3cd; color: #856404; padding: 3px 10px; border-radius: 4px; font-weight: 600; font-size: 12px; }
+        .badge-info { background: #d1ecf1; color: #0c5460; padding: 3px 10px; border-radius: 4px; font-weight: 600; font-size: 12px; }
+        .timeline { display: flex; gap: 0; margin: 16px 0; }
+        .timeline-item {
+            flex: 1; text-align: center; padding: 14px 8px;
+            border: 1px solid #ddd; font-size: 13px; position: relative;
+        }
+        .timeline-item.active { font-weight: 700; }
+        .timeline-item.tl-none { background: #d4edda; }
+        .timeline-item.tl-warn { background: #fff3cd; }
+        .timeline-item.tl-crit { background: #f8d7da; }
+        .timeline-item.tl-expired { background: #721c24; color: white; }
+        .mono { font-family: 'Courier New', monospace; font-size: 13px; }
+        .url-box {
+            background: var(--qb-light-gray); padding: 10px 14px;
+            border-radius: 4px; font-family: monospace; font-size: 12px;
+            word-break: break-all; margin: 8px 0;
+        }
+        .run-btn {
+            display: inline-block; padding: 10px 22px; border: none;
+            border-radius: 4px; font-weight: 600; font-size: 14px;
+            color: white; cursor: pointer; text-decoration: none;
+        }
+        .run-btn:hover { opacity: 0.9; }
+        .run-btn.s1 { background: var(--qb-blue); }
+        .run-btn.s2 { background: #6f42c1; }
+        .section-label { font-weight: 600; font-size: 14px; margin: 14px 0 6px; }
+        .help-text { color: #666; font-size: 13px; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div>
+                <h1>Hard Expiration Test Harness</h1>
+                <div class="subtitle">Refresh Token 5-Year Lifetime — OAuth 2.0 QA</div>
+            </div>
+            <div>
+                <span th:if="${connected}" class="status-badge status-connected">Connected</span>
+                <span th:unless="${connected}" class="status-badge status-disconnected">Not Connected</span>
+                <a th:href="@{/}" class="btn btn-secondary btn-sm" style="margin-left: 10px;">Home</a>
+                <a th:if="${connected}" th:href="@{/oauth/disconnect}" class="btn btn-danger btn-sm" style="margin-left: 6px;">Disconnect</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Flash messages -->
+        <div th:if="${message}" class="alert" th:classappend="${error != null and error ? 'alert-danger' : 'alert-success'}">
+            <span th:text="${message}"></span>
+        </div>
+
+        <!-- Not connected prompt -->
+        <div th:unless="${connected}" class="hero" style="padding: 40px;">
+            <h2>Connect to QuickBooks to begin testing</h2>
+            <p style="color: #666;">You need an active OAuth session with valid refresh token to run the hard expiration tests.</p>
+            <a th:href="@{/oauth/connect}" class="btn btn-primary" style="margin-top: 16px;">Connect to QuickBooks</a>
+        </div>
+
+        <!-- Test Steps (only shown when connected) -->
+        <div th:if="${connected}">
+
+            <div class="card" style="margin-bottom: 24px; background: var(--qb-light-gray);">
+                <div style="display: flex; gap: 40px; flex-wrap: wrap;">
+                    <div><strong>Company ID:</strong> <span class="mono" th:text="${realmId}"></span></div>
+                    <div><strong>Environment:</strong> <span class="mono" th:text="${environment}"></span></div>
+                    <div><strong>Client ID:</strong> <span class="mono" th:text="${clientId}"></span></div>
+                </div>
+            </div>
+
+            <!-- ==================== STEP 1 ==================== -->
+            <div class="test-step">
+                <div class="step-header step-1">
+                    <span class="step-number">1</span>
+                    Validate Token API Enhancement — <code style="color:#cce5ff;">x-include-refresh-token-hard-expires-in</code>
+                </div>
+                <div class="step-body">
+                    <p class="help-text">
+                        Sends <code>POST /v1/tokens/bearer</code> with header
+                        <code>x-include-refresh-token-hard-expires-in: true</code>
+                        and checks for <code>x_refresh_token_hard_expires_in</code> in the response.
+                    </p>
+
+                    <form th:action="@{/test/step1}" method="post" style="margin-bottom: 14px;">
+                        <button type="submit" class="run-btn s1">Run Step 1 — Refresh with Hard Expiration Header</button>
+                    </form>
+
+                    <!-- Error -->
+                    <div th:if="${step1Error}" class="alert alert-danger" th:text="${step1Error}"></div>
+
+                    <!-- Results -->
+                    <div th:if="${step1_response != null}">
+                        <p class="section-label">Response Fields</p>
+                        <table class="result-table">
+                            <tr>
+                                <th style="width: 320px;">Field</th>
+                                <th>Value</th>
+                                <th style="width: 100px;">Status</th>
+                            </tr>
+                            <tr>
+                                <td class="mono">access_token</td>
+                                <td class="mono" th:text="${step1_maskedAccessToken ?: 'N/A'}"></td>
+                                <td><span th:if="${step1_response['access_token'] != null}" class="badge-pass">PRESENT</span></td>
+                            </tr>
+                            <tr>
+                                <td class="mono">refresh_token</td>
+                                <td class="mono" th:text="${step1_maskedRefreshToken ?: 'N/A'}"></td>
+                                <td><span th:if="${step1_response['refresh_token'] != null}" class="badge-pass">PRESENT</span></td>
+                            </tr>
+                            <tr>
+                                <td class="mono">x_refresh_token_expires_in</td>
+                                <td class="mono" th:text="${step1_response['x_refresh_token_expires_in']}"></td>
+                                <td><span th:if="${step1_response['x_refresh_token_expires_in'] != null}" class="badge-pass">PRESENT</span></td>
+                            </tr>
+                            <tr style="background: #f0f7ff;">
+                                <td class="mono" style="font-weight: 700;">x_refresh_token_hard_expires_in</td>
+                                <td>
+                                    <span th:if="${step1_hasHardExpires}" class="mono">
+                                        <span th:text="${step1_hardExpiresIn}"></span> seconds
+                                        (<span th:text="${step1_hardExpiresDays}"></span> days)
+                                        — expires <span th:text="${step1_expiryDate}"></span>
+                                    </span>
+                                    <span th:unless="${step1_hasHardExpires}" style="color: #856404;">
+                                        Not present — legacy client fallback (Step 2) required
+                                    </span>
+                                </td>
+                                <td>
+                                    <span th:if="${step1_hasHardExpires and step1_valid}" class="badge-pass">VALID</span>
+                                    <span th:if="${step1_hasHardExpires and !step1_valid}" class="badge-fail">INVALID</span>
+                                    <span th:unless="${step1_hasHardExpires}" class="badge-warn">MISSING</span>
+                                </td>
+                            </tr>
+                        </table>
+                        <div th:if="${step1_hasHardExpires}" class="alert alert-success" style="margin-top: 10px;">
+                            Step 1 PASSED: Response contains <code>x_refresh_token_hard_expires_in</code> with valid value in seconds within the 5-year maximum.
+                        </div>
+                        <div th:unless="${step1_hasHardExpires}" class="alert alert-info" style="margin-top: 10px;">
+                            The new field is not present. This is expected if the feature is not yet deployed. Proceed to Step 2 for legacy fallback testing.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== STEP 2 ==================== -->
+            <div class="test-step">
+                <div class="step-header step-2">
+                    <span class="step-number">2</span>
+                    Developer Logic — Calculated Expiry (Legacy Fallback)
+                </div>
+                <div class="step-body">
+                    <p class="help-text">
+                        Refreshes the token twice within 30 days of the standard <code>x_refresh_token_expires_in</code> date,
+                        then compares old vs. new expiry. If <code>old_expiry == new_expiry</code>, the token has hit its 5-year hard limit.
+                    </p>
+
+                    <form th:action="@{/test/step2}" method="post" style="margin-bottom: 14px;">
+                        <button type="submit" class="run-btn s2">Run Step 2 — Compare Old vs New Expiry</button>
+                    </form>
+
+                    <div th:if="${step2Error}" class="alert alert-danger" th:text="${step2Error}"></div>
+
+                    <div th:if="${step2_oldExpiresIn != null}">
+                        <table class="result-table">
+                            <tr>
+                                <th style="width: 320px;">Check</th>
+                                <th>Result</th>
+                                <th style="width: 100px;">Status</th>
+                            </tr>
+                            <tr>
+                                <td>Old <code>x_refresh_token_expires_in</code></td>
+                                <td class="mono"><span th:text="${step2_oldExpiresIn}"></span> sec — <span th:text="${step2_oldExpiryDate}"></span></td>
+                                <td><span class="badge-info">CAPTURED</span></td>
+                            </tr>
+                            <tr>
+                                <td>New <code>x_refresh_token_expires_in</code></td>
+                                <td class="mono"><span th:text="${step2_newExpiresIn}"></span> sec — <span th:text="${step2_newExpiryDate}"></span></td>
+                                <td><span class="badge-info">CAPTURED</span></td>
+                            </tr>
+                            <tr>
+                                <td>Expiries Match? (<code>old == new</code>)</td>
+                                <td th:text="${step2_expiriesMatch}"></td>
+                                <td>
+                                    <span th:if="${step2_expiriesMatch}" class="badge-fail">HARD LIMIT HIT</span>
+                                    <span th:unless="${step2_expiriesMatch}" class="badge-pass">RENEWED OK</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Within 30-Day Window?</td>
+                                <td th:text="${step2_within30d}"></td>
+                                <td>
+                                    <span th:if="${step2_within30d}" class="badge-warn">YES — MONITOR</span>
+                                    <span th:unless="${step2_within30d}" class="badge-pass">NO — SAFE</span>
+                                </td>
+                            </tr>
+                            <tr style="background: #f9f0ff;">
+                                <td style="font-weight: 700;">Requires Re-Auth?</td>
+                                <td th:text="${step2_requiresReAuth}"></td>
+                                <td>
+                                    <span th:if="${step2_requiresReAuth}" class="badge-fail">RE-AUTH NEEDED</span>
+                                    <span th:unless="${step2_requiresReAuth}" class="badge-pass">NO ACTION</span>
+                                </td>
+                            </tr>
+                        </table>
+                        <div th:if="${step2_requiresReAuth}" class="alert alert-danger" style="margin-top: 10px;">
+                            Token has hit its 5-year hard limit. The user must be guided to re-authorize via the Reconnect URL (Step 3).
+                        </div>
+                        <div th:unless="${step2_requiresReAuth}" class="alert alert-success" style="margin-top: 10px;">
+                            Token was successfully renewed — no re-auth required at this time.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== STEP 3 ==================== -->
+            <div class="test-step">
+                <div class="step-header step-3">
+                    <span class="step-number">3</span>
+                    Reconnect URL Integration — Intuit Proxy Validation
+                </div>
+                <div class="step-body">
+                    <p class="help-text">
+                        Validates that the Reconnect CTA goes through the Intuit proxy asset to prevent malicious URL injection.
+                        All 3P developers must configure a Reconnect URL in their production settings.
+                    </p>
+
+                    <p class="section-label">Generated Reconnect URL (from your App ID + Realm ID)</p>
+                    <div class="url-box" th:text="${step3_reconnectUrl ?: 'N/A — connect first'}"></div>
+                    <div th:if="${step3_reconnectUrl}">
+                        <span th:if="${step3_reconnectUrlValid}" class="badge-pass">VALID — Routes through Intuit proxy</span>
+                        <span th:unless="${step3_reconnectUrlValid}" class="badge-fail">INVALID — Does not match Intuit proxy pattern</span>
+                    </div>
+
+                    <p class="section-label" style="margin-top: 20px;">Configured Reconnect URL (from application.yml)</p>
+                    <div class="url-box" th:text="${step3_configuredUrl ?: 'Not configured — set quickbooks.reconnect-url in application.yml'}"></div>
+                    <div th:if="${step3_configuredUrl}">
+                        <span th:if="${step3_configuredUrlValid}" class="badge-pass">VALID</span>
+                        <span th:unless="${step3_configuredUrlValid}" class="badge-fail">INVALID — Must use https://appcenter.intuit.com/... proxy</span>
+                    </div>
+                    <div th:unless="${step3_configuredUrl}" style="margin-top: 6px;">
+                        <span class="badge-warn">NOT SET</span>
+                        <span style="font-size: 13px; color: #666; margin-left: 6px;">Required for production apps</span>
+                    </div>
+
+                    <p class="section-label" style="margin-top: 20px;">Security Check — Test Custom URL</p>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input id="customUrl" type="text" placeholder="Paste a URL to validate..."
+                               style="flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 13px;">
+                        <button onclick="validateUrl()" class="btn btn-sm" style="background: #e83e8c; color: white;">Validate</button>
+                    </div>
+                    <div id="customUrlResult" style="margin-top: 8px;"></div>
+                </div>
+            </div>
+
+            <!-- ==================== STEP 4 ==================== -->
+            <div class="test-step">
+                <div class="step-header step-4">
+                    <span class="step-number">4</span>
+                    Notification Timeline — IPN / Email / Expiration
+                </div>
+                <div class="step-body">
+                    <p class="help-text">
+                        Simulates the notification triggers at T-30 days (IPN), T-7 days (email), and expiration day (error + sync stop).
+                    </p>
+
+                    <!-- Timeline visualization -->
+                    <p class="section-label">Notification Timeline</p>
+                    <div class="timeline">
+                        <div class="timeline-item tl-none" th:classappend="${step4_level == 'NONE' ? ' active' : ''}">
+                            <div style="font-weight: 700;">&gt; 30 days</div>
+                            <div style="font-size: 12px; margin-top: 4px;">No action</div>
+                            <div style="font-size: 11px; color: #555; margin-top: 2px;">NONE</div>
+                        </div>
+                        <div class="timeline-item tl-warn" th:classappend="${step4_level == 'WARNING_30_DAY' ? ' active' : ''}">
+                            <div style="font-weight: 700;">T-30 days</div>
+                            <div style="font-size: 12px; margin-top: 4px;">App Card Warning</div>
+                            <div style="font-size: 11px; color: #856404; margin-top: 2px;">IPN Task</div>
+                        </div>
+                        <div class="timeline-item tl-crit" th:classappend="${step4_level == 'CRITICAL_7_DAY' ? ' active' : ''}">
+                            <div style="font-weight: 700;">T-7 days</div>
+                            <div style="font-size: 12px; margin-top: 4px;">Email Notification</div>
+                            <div style="font-size: 11px; color: #721c24; margin-top: 2px;">Admin + User</div>
+                        </div>
+                        <div class="timeline-item tl-expired" th:classappend="${step4_level == 'EXPIRED' ? ' active' : ''}">
+                            <div style="font-weight: 700;">Day 0</div>
+                            <div style="font-size: 12px; margin-top: 4px;">App Card Error</div>
+                            <div style="font-size: 11px; margin-top: 2px;">Sync Stopped</div>
+                        </div>
+                    </div>
+
+                    <div th:if="${step4_hardExpiresIn != null}">
+                        <table class="result-table">
+                            <tr>
+                                <th style="width: 320px;">Check</th>
+                                <th>Result</th>
+                                <th style="width: 100px;">Status</th>
+                            </tr>
+                            <tr>
+                                <td>Current Notification Level</td>
+                                <td class="mono" th:text="${step4_level}"></td>
+                                <td>
+                                    <span th:if="${step4_level == 'NONE'}" class="badge-pass">OK</span>
+                                    <span th:if="${step4_level == 'WARNING_30_DAY'}" class="badge-warn">WARNING</span>
+                                    <span th:if="${step4_level == 'CRITICAL_7_DAY'}" class="badge-fail">CRITICAL</span>
+                                    <span th:if="${step4_level == 'EXPIRED'}" class="badge-fail">EXPIRED</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Show In-Product Notification (IPN)?</td>
+                                <td th:text="${step4_showIPN}"></td>
+                                <td>
+                                    <span th:if="${step4_showIPN}" class="badge-warn">YES</span>
+                                    <span th:unless="${step4_showIPN}" class="badge-pass">NO</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Send Email to Admin + User?</td>
+                                <td th:text="${step4_sendEmail}"></td>
+                                <td>
+                                    <span th:if="${step4_sendEmail}" class="badge-fail">YES</span>
+                                    <span th:unless="${step4_sendEmail}" class="badge-pass">NO</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Stop Data Sync?</td>
+                                <td th:text="${step4_stopSync}"></td>
+                                <td>
+                                    <span th:if="${step4_stopSync}" class="badge-fail">STOPPED</span>
+                                    <span th:unless="${step4_stopSync}" class="badge-pass">RUNNING</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Hard Expiration Date</td>
+                                <td class="mono" th:text="${step4_expiryDate}"></td>
+                                <td><span class="badge-info">INFO</span></td>
+                            </tr>
+                            <tr>
+                                <td>Days Remaining</td>
+                                <td class="mono" th:text="${step4_hardExpiresDays}"></td>
+                                <td><span class="badge-info">INFO</span></td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div th:unless="${step4_hardExpiresIn}" class="alert alert-info" style="margin-top: 10px;">
+                        Run Step 1 first to get the hard expiration value, then this section will populate with real timeline data.
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /connected -->
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 Refresh Token Hard Expiration — QA Test Harness</p>
+            <p style="margin-top: 5px; font-size: 12px; color: #666;">
+                Branch: <code>feature/refresh-token-hard-expiration</code>
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        function validateUrl() {
+            var url = document.getElementById('customUrl').value;
+            if (!url) return;
+            fetch('/test/step3/validate?url=' + encodeURIComponent(url))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var el = document.getElementById('customUrlResult');
+                    if (data.valid) {
+                        el.innerHTML = '<span class="badge-pass">VALID</span> <span style="font-size:13px;color:#155724;">Routes through Intuit proxy — safe</span>';
+                    } else {
+                        el.innerHTML = '<span class="badge-fail">REJECTED</span> <span style="font-size:13px;color:#721c24;">Does NOT match Intuit proxy pattern — potential injection risk</span>';
+                    }
+                });
+        }
+    </script>
+</body>
+</html>

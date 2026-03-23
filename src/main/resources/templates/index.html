@@ -28,9 +28,10 @@
 
         <!-- Hero Section -->
         <div class="hero">
-            <h1>Monitor QuickBooks Cloud Events</h1>
+            <h1>Refresh Token Hard Expiration — QA</h1>
             
             <div th:if="${connected == null or !connected}">
+                <p style="color: #666; margin-bottom: 20px;">Connect to QuickBooks to begin testing the 5-year hard expiration feature.</p>
                 <a th:href="@{/oauth/connect}" class="btn btn-primary" style="font-size: 18px; padding: 15px 30px;">
                     Connect to QuickBooks
                 </a>
@@ -50,7 +51,7 @@
                         </tr>
                     </table>
                     <div style="margin-top: 20px; text-align: center;">
-                        <a th:href="@{/dashboard}" class="btn btn-primary">View Webhooks Dashboard</a>
+                        <a th:href="@{/test-harness}" class="btn btn-primary">Open Test Harness</a>
                         <a th:href="@{/oauth/disconnect}" class="btn btn-danger" style="margin-left: 10px;">Disconnect</a>
                     </div>
                 </div>
