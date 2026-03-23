@@ -86,6 +86,9 @@ public class QuickBooksConfig {
     /** Template for deep links to QBO UI */
     private String deepLinkTemplate = "https://app.qbo.intuit.com/app/invoice?txnId=%s&companyId=%s";
     
+    /** Reconnect URL configured in production settings for token hard-expiration re-auth flow */
+    private String reconnectUrl;
+    
     /** Default constructor for property binding */
     public QuickBooksConfig() {
         // Set default scopes
@@ -198,6 +201,14 @@ public class QuickBooksConfig {
     
     public void setDeepLinkTemplate(String deepLinkTemplate) {
         this.deepLinkTemplate = deepLinkTemplate;
+    }
+    
+    public String getReconnectUrl() {
+        return reconnectUrl;
+    }
+    
+    public void setReconnectUrl(String reconnectUrl) {
+        this.reconnectUrl = reconnectUrl;
     }
     
     /**

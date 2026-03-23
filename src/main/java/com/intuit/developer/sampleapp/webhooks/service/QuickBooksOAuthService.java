@@ -41,6 +41,9 @@ public class QuickBooksOAuthService {
     @Autowired
     private QuickBooksConfig config;
     
+    @Autowired
+    private RefreshTokenHardExpirationService hardExpirationService;
+    
     private final SecureRandom secureRandom = new SecureRandom();
     
     /**
@@ -242,6 +245,33 @@ public class QuickBooksOAuthService {
         }
     }
     
+    /**
+     * Refreshes the access token while requesting the hard expiration field.
+     * Sends the x-include-refresh-token-hard-expires-in: true header so the
+     * response includes x_refresh_token_hard_expires_in (seconds until the
+     * 5-year absolute lifetime expires).
+     *
+     * @param refreshToken the current refresh token
+     * @return map with access_token, refresh_token, expires_in and
+     *         x_refresh_token_hard_expires_in (if supported)
+     */
+    public Map<String, Object> refreshTokenWithHardExpiration(String refreshToken) {
+        try {
+            if (refreshToken == null || refreshToken.trim().isEmpty()) {
+                throw new RuntimeException("Refresh token is required");
+            }
+            validateOAuthConfiguration();
+
+            // Delegate to the dedicated hard-expiration service which sends the
+            // custom header via RestTemplate (SDK does not support this header yet)
+            return hardExpirationService.refreshTokenWithHardExpiration(refreshToken);
+
+        } catch (RuntimeException e) {
+            logger.error("Error refreshing token with hard-expiration header: {}", e.getMessage());
+            throw e;
+        }
+    }
+
     /**
      * Generates a cryptographically-strong random state parameter for the OAuth
      * authorization request
