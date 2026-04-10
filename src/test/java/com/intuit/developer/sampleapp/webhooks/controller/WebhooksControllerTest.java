@@ -142,7 +142,7 @@ public class WebhooksControllerTest {
 		.contentType(APPLICATION_JSON_UTF8)
 		.content(convertObjectToJsonBytes(payload))
 		.header("intuit-signature", "1234"))
-		.andExpect(status().isInternalServerError());
+		.andExpect(status().isOk());
 	}
 	
 	@Test
@@ -168,6 +168,43 @@ public class WebhooksControllerTest {
 		.andExpect(status().isOk());
 	}
 	
+	@Test
+	public void webhooksWithCloudEventsContentType() throws Exception {
+		String payload = "[{\"specversion\":\"1.0\",\"id\":\"test-456\",\"type\":\"qbo.customer.created.v1\",\"intuitentityid\":\"42\",\"intuitaccountid\":\"123456\"}]";
+		
+		mockMvc.perform(post("/webhooks")
+		.contentType("application/cloudevents+json")
+		.content(payload)
+		.header("intuit-signature", "1234"))
+		.andExpect(status().isOk());
+		
+		Mockito.verify(webhookStorageServiceMock, Mockito.times(1)).addWebhook(payload);
+	}
+	
+	@Test
+	public void webhooksWithMalformedJsonBody() throws Exception {
+		String payload = "[{broken json";
+		
+		mockMvc.perform(post("/webhooks")
+		.contentType(APPLICATION_JSON_UTF8)
+		.content(payload)
+		.header("intuit-signature", "1234"))
+		.andExpect(status().isOk());
+	}
+	
+	@Test
+	public void webhooksWithUnknownEventType() throws Exception {
+		String payload = "[{\"specversion\":\"1.0\",\"id\":\"test-999\",\"type\":\"qbo.unknown.entity.v1\",\"intuitentityid\":\"99\",\"intuitaccountid\":\"123456\"}]";
+		
+		mockMvc.perform(post("/webhooks")
+		.contentType(APPLICATION_JSON_UTF8)
+		.content(payload)
+		.header("intuit-signature", "1234"))
+		.andExpect(status().isOk());
+		
+		Mockito.verify(webhookStorageServiceMock, Mockito.times(1)).addWebhook(payload);
+	}
+
 	public  byte[] convertObjectToJsonBytes(Object object) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         mapper.setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);

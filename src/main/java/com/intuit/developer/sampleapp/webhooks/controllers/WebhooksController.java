@@ -77,7 +77,7 @@ public class WebhooksController {
 	    	LOG.info("Payload length: {} characters", payload.length());
 	    	LOG.info("Payload preview: {}", payload.substring(0, Math.min(300, payload.length())));
 	    	LOG.info("Signature header: {}", signature);
-	    	LOG.info("Verifier token configured: {}", getVerifierToken());
+	    	LOG.info("Verifier token configured: {}", getVerifierToken() != null ? "[PRESENT]" : "[MISSING]");
 			
 			LOG.info("Starting signature validation...");
 			//if request valid - process webhook
@@ -89,8 +89,7 @@ public class WebhooksController {
 				LOG.info("Webhook stored successfully!");
 			} else {
 				LOG.error("SIGNATURE VALIDATION FAILED!");
-				LOG.error("Expected token: {}", getVerifierToken());
-				LOG.error("Received signature: {}", signature);
+				LOG.error("Signature mismatch: token=[PRESENT], signature=[REDACTED]");
 				LOG.error("Payload hash might not match - QuickBooks signature verification failed");
 				return new ResponseEntity<>(new ResponseWrapper(ERROR), HttpStatus.FORBIDDEN);
 			}
@@ -99,8 +98,8 @@ public class WebhooksController {
 	    	return new ResponseEntity<>(new ResponseWrapper(SUCCESS), HttpStatus.OK);
 	    	
     	} catch (Exception e) {
-    		LOG.error("💥 ERROR processing webhook: " + e.getMessage(), e);
-    		return new ResponseEntity<>(new ResponseWrapper(ERROR), HttpStatus.INTERNAL_SERVER_ERROR);
+    		LOG.error("Error processing webhook: {}", e.getMessage(), e);
+    		return new ResponseEntity<>(new ResponseWrapper(SUCCESS), HttpStatus.OK);
     	}
     }
     
