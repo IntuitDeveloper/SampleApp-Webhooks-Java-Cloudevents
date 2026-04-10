@@ -2,6 +2,7 @@ package com.intuit.developer.sampleapp.webhooks.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -109,12 +110,30 @@ public class WebhookStorageServiceTest {
         assertEquals(0, webhookStorageService.getTotalEventCount());
     }
     
+    // Test 4: Idempotency — duplicate event id must be skipped, storage count must not increase
+    @Test
+    public void testAddWebhook_DuplicateId_Skipped() {
+        // Arrange
+        String payload = "[{\"id\":\"dup-001\",\"type\":\"qbo.customer.created.v1\"}]";
+        List<WebhooksCloudEvents> mockEvents = createMockEventsWithId("dup-001");
+        when(cloudEventsParser.parseCloudEvents(anyString())).thenReturn(mockEvents);
+        
+        // Act - send the same event id twice
+        webhookStorageService.addWebhook(payload);
+        webhookStorageService.addWebhook(payload);
+        
+        // Assert - only first event stored; second was deduplicated
+        assertEquals(1, webhookStorageService.getTotalEventCount());
+        verify(cloudEventsParser, times(2)).parseCloudEvents(payload);
+    }
+    
     @Test
     public void testAddWebhook_ExceedsMaxCapacity() {
         // Arrange
         int maxCapacity = webhookStorageService.getMaxCapacity();
-        List<WebhooksCloudEvents> mockEvents = createMockEvents(1);
-        when(cloudEventsParser.parseCloudEvents(anyString())).thenReturn(mockEvents);
+        AtomicInteger counter = new AtomicInteger(0);
+        when(cloudEventsParser.parseCloudEvents(anyString())).thenAnswer(inv ->
+            createMockEventsWithId("test-" + counter.getAndIncrement()));
         
         // Act - Add more than max capacity
         for (int i = 0; i < maxCapacity + 5; i++) {
@@ -205,8 +224,9 @@ public class WebhookStorageServiceTest {
     @Test
     public void testConcurrentAccess() throws InterruptedException {
         // Arrange
-        List<WebhooksCloudEvents> mockEvents = createMockEvents(1);
-        when(cloudEventsParser.parseCloudEvents(anyString())).thenReturn(mockEvents);
+        AtomicInteger counter = new AtomicInteger(0);
+        when(cloudEventsParser.parseCloudEvents(anyString())).thenAnswer(inv ->
+            createMockEventsWithId("test-" + counter.getAndIncrement()));
         
         // Act - Simulate concurrent webhook additions
         Thread thread1 = new Thread(() -> {

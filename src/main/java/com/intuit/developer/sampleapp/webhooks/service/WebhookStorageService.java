@@ -2,9 +2,11 @@ package com.intuit.developer.sampleapp.webhooks.service;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,7 @@ public class WebhookStorageService {
     private static final int MAX_WEBHOOKS = 50; // Maximum number of webhooks to retain
     
     private final List<WebhooksCloudEvents> recentCloudEvents = Collections.synchronizedList(new ArrayList<>());
+    private final Set<String> processedEventIds = Collections.synchronizedSet(new HashSet<>());
     
     @Autowired
     private CloudEventsWebhookParser cloudEventsParser;
@@ -90,6 +93,17 @@ public class WebhookStorageService {
         
         // Add all CloudEvents to storage
         for (WebhooksCloudEvents event : events) {
+            String eventId = event.getId();
+
+            if (eventId != null && processedEventIds.contains(eventId)) {
+                LOG.info("Skipping duplicate CloudEvent: id={} (already processed)", eventId);
+                continue;
+            }
+
+            if (eventId != null) {
+                processedEventIds.add(eventId);
+            }
+
             // Add to beginning of list (most recent first)
             recentCloudEvents.add(0, event);
             
@@ -112,6 +126,7 @@ public class WebhookStorageService {
     public synchronized void clearWebhooks() {
         int previousSize = recentCloudEvents.size();
         recentCloudEvents.clear();
+        processedEventIds.clear();
         LOG.info("Cleared {} CloudEvent(s) from storage", previousSize);
     }
     
