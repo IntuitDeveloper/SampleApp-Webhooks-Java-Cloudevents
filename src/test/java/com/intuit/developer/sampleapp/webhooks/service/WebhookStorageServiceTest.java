@@ -1,243 +1,167 @@
 package com.intuit.developer.sampleapp.webhooks.service;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import static org.mockito.ArgumentMatchers.anyString;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.intuit.ipp.data.WebhooksCloudEvents;
+import com.intuit.developer.sampleapp.webhooks.domain.WebhookEvent;
 
 /**
- * Unit tests for WebhookStorageService
+ * Unit tests for WebhookStorageService (legacy webhook format)
  */
-@ExtendWith(MockitoExtension.class)
 public class WebhookStorageServiceTest {
     
-    @Mock
-    private CloudEventsWebhookParser cloudEventsParser;
-    
-    @InjectMocks
     private WebhookStorageService webhookStorageService;
+    
+    private static final String VALID_PAYLOAD = "{\"eventNotifications\":[{\"realmId\":\"9341455322581846\",\"dataChangeEvent\":{\"entities\":[{\"name\":\"Customer\",\"id\":\"42\",\"operation\":\"Create\",\"lastUpdated\":\"2025-04-10T11:00:00-07:00\"}]}}]}";
+    
+    private static final String MULTI_ENTITY_PAYLOAD = "{\"eventNotifications\":[{\"realmId\":\"9341455322581846\",\"dataChangeEvent\":{\"entities\":[{\"name\":\"Customer\",\"id\":\"42\",\"operation\":\"Create\",\"lastUpdated\":\"2025-04-10T11:00:00-07:00\"},{\"name\":\"Invoice\",\"id\":\"100\",\"operation\":\"Update\",\"lastUpdated\":\"2025-04-10T11:05:00-07:00\"},{\"name\":\"Vendor\",\"id\":\"7\",\"operation\":\"Delete\",\"lastUpdated\":\"2025-04-10T11:10:00-07:00\"}]}}]}";
     
     @BeforeEach
     public void setUp() {
-        webhookStorageService.clearWebhooks();
+        webhookStorageService = new WebhookStorageService();
     }
     
     @Test
     public void testAddWebhook_ValidPayload() {
-        // Arrange
-        String payload = "[{\"id\":\"test-1\",\"type\":\"qbo.customer.created.v1\"}]";
-        List<WebhooksCloudEvents> mockEvents = createMockEvents(1);
-        when(cloudEventsParser.parseCloudEvents(anyString())).thenReturn(mockEvents);
+        webhookStorageService.addWebhook(VALID_PAYLOAD);
         
-        // Act
-        webhookStorageService.addWebhook(payload);
-        
-        // Assert
         assertEquals(1, webhookStorageService.getTotalEventCount());
-        List<WebhooksCloudEvents> storedEvents = webhookStorageService.getRecentCloudEvents();
-        assertEquals(1, storedEvents.size());
-        verify(cloudEventsParser, times(1)).parseCloudEvents(payload);
+        List<WebhookEvent> events = webhookStorageService.getRecentWebhooks();
+        assertEquals(1, events.size());
+        assertEquals("9341455322581846", events.get(0).getRealmId());
+        assertEquals("Customer", events.get(0).getEntityName());
+        assertEquals("42", events.get(0).getEntityId());
+        assertEquals("Create", events.get(0).getOperation());
     }
     
     @Test
     public void testAddWebhook_NullPayload() {
-        // Act & Assert
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            webhookStorageService.addWebhook(null);
-        });
-        assertNotNull(exception);
+        assertThrows(IllegalArgumentException.class, () -> webhookStorageService.addWebhook(null));
     }
     
     @Test
     public void testAddWebhook_EmptyPayload() {
-        // Act & Assert
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            webhookStorageService.addWebhook("");
-        });
-        assertNotNull(exception);
+        assertThrows(IllegalArgumentException.class, () -> webhookStorageService.addWebhook(""));
     }
     
     @Test
     public void testAddWebhook_WhitespacePayload() {
-        // Act & Assert
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> {
-            webhookStorageService.addWebhook("   ");
-        });
-        assertNotNull(exception);
+        assertThrows(IllegalArgumentException.class, () -> webhookStorageService.addWebhook("   "));
     }
     
     @Test
-    public void testAddWebhook_MultipleEvents() {
-        // Arrange
-        String payload = "[{\"id\":\"test-1\"},{\"id\":\"test-2\"},{\"id\":\"test-3\"}]";
-        List<WebhooksCloudEvents> mockEvents = createMockEvents(3);
-        when(cloudEventsParser.parseCloudEvents(anyString())).thenReturn(mockEvents);
-        
-        // Act
-        webhookStorageService.addWebhook(payload);
-        
-        // Assert
+    public void testAddWebhook_MultipleEntities() {
+        webhookStorageService.addWebhook(MULTI_ENTITY_PAYLOAD);
         assertEquals(3, webhookStorageService.getTotalEventCount());
     }
     
     @Test
-    public void testAddWebhook_EmptyEventList() {
-        // Arrange
-        String payload = "[]";
-        when(cloudEventsParser.parseCloudEvents(anyString())).thenReturn(new ArrayList<>());
-        
-        // Act
-        webhookStorageService.addWebhook(payload);
-        
-        // Assert
+    public void testAddWebhook_EmptyNotifications() {
+        webhookStorageService.addWebhook("{\"eventNotifications\":[]}");
         assertEquals(0, webhookStorageService.getTotalEventCount());
-    }
-    
-    // Test 4: Idempotency — duplicate event id must be skipped, storage count must not increase
-    @Test
-    public void testAddWebhook_DuplicateId_Skipped() {
-        // Arrange
-        String payload = "[{\"id\":\"dup-001\",\"type\":\"qbo.customer.created.v1\"}]";
-        List<WebhooksCloudEvents> mockEvents = createMockEventsWithId("dup-001");
-        when(cloudEventsParser.parseCloudEvents(anyString())).thenReturn(mockEvents);
-        
-        // Act - send the same event id twice
-        webhookStorageService.addWebhook(payload);
-        webhookStorageService.addWebhook(payload);
-        
-        // Assert - only first event stored; second was deduplicated
-        assertEquals(1, webhookStorageService.getTotalEventCount());
-        verify(cloudEventsParser, times(2)).parseCloudEvents(payload);
     }
     
     @Test
     public void testAddWebhook_ExceedsMaxCapacity() {
-        // Arrange
         int maxCapacity = webhookStorageService.getMaxCapacity();
-        AtomicInteger counter = new AtomicInteger(0);
-        when(cloudEventsParser.parseCloudEvents(anyString())).thenAnswer(inv ->
-            createMockEventsWithId("test-" + counter.getAndIncrement()));
         
-        // Act - Add more than max capacity
         for (int i = 0; i < maxCapacity + 5; i++) {
-            webhookStorageService.addWebhook("[{\"id\":\"test-" + i + "\"}]");
+            String payload = "{\"eventNotifications\":[{\"realmId\":\"realm-" + i + "\",\"dataChangeEvent\":{\"entities\":[{\"name\":\"Customer\",\"id\":\"" + i + "\",\"operation\":\"Create\",\"lastUpdated\":\"2025-04-10T11:00:00-07:00\"}]}}]}";
+            webhookStorageService.addWebhook(payload);
         }
         
-        // Assert - Should maintain max capacity
         assertEquals(maxCapacity, webhookStorageService.getTotalEventCount());
     }
     
     @Test
-    public void testAddWebhook_ParseException() {
-        // Arrange
-        String payload = "invalid json";
-        when(cloudEventsParser.parseCloudEvents(anyString()))
-            .thenThrow(new RuntimeException("Parse error"));
-        
-        // Act & Assert
-        Exception exception = assertThrows(RuntimeException.class, () -> {
-            webhookStorageService.addWebhook(payload);
-        });
-        assertNotNull(exception);
+    public void testAddWebhook_InvalidJson() {
+        assertThrows(RuntimeException.class, () -> webhookStorageService.addWebhook("invalid json"));
     }
     
     @Test
     public void testClearWebhooks() {
-        // Arrange - Add some webhooks first
-        List<WebhooksCloudEvents> mockEvents = createMockEvents(5);
-        when(cloudEventsParser.parseCloudEvents(anyString())).thenReturn(mockEvents);
-        webhookStorageService.addWebhook("[{\"id\":\"test\"}]");
-        assertEquals(5, webhookStorageService.getTotalEventCount());
+        webhookStorageService.addWebhook(VALID_PAYLOAD);
+        assertEquals(1, webhookStorageService.getTotalEventCount());
         
-        // Act
         webhookStorageService.clearWebhooks();
         
-        // Assert
         assertEquals(0, webhookStorageService.getTotalEventCount());
-        assertTrue(webhookStorageService.getRecentCloudEvents().isEmpty());
+        assertTrue(webhookStorageService.getRecentWebhooks().isEmpty());
     }
     
     @Test
-    public void testGetRecentCloudEvents_ReturnsUnmodifiableList() {
-        // Arrange
-        List<WebhooksCloudEvents> mockEvents = createMockEvents(2);
-        when(cloudEventsParser.parseCloudEvents(anyString())).thenReturn(mockEvents);
-        webhookStorageService.addWebhook("[{\"id\":\"test\"}]");
-        
-        // Act
-        List<WebhooksCloudEvents> events = webhookStorageService.getRecentCloudEvents();
-        
-        // Assert - Attempt to modify should throw exception
-        Exception exception = assertThrows(UnsupportedOperationException.class, () -> {
-            events.clear();
-        });
-        assertNotNull(exception);
+    public void testGetRecentWebhooks_ReturnsUnmodifiableList() {
+        webhookStorageService.addWebhook(VALID_PAYLOAD);
+        List<WebhookEvent> events = webhookStorageService.getRecentWebhooks();
+        assertThrows(UnsupportedOperationException.class, () -> events.clear());
     }
     
     @Test
-    public void testGetRecentCloudEvents_MostRecentFirst() {
-        // Arrange
+    public void testGetRecentWebhooks_MostRecentFirst() {
         for (int i = 0; i < 3; i++) {
-            List<WebhooksCloudEvents> mockEvents = createMockEventsWithId("test-" + i);
-            when(cloudEventsParser.parseCloudEvents(anyString())).thenReturn(mockEvents);
-            webhookStorageService.addWebhook("[{\"id\":\"test-" + i + "\"}]");
+            String payload = "{\"eventNotifications\":[{\"realmId\":\"realm-" + i + "\",\"dataChangeEvent\":{\"entities\":[{\"name\":\"Customer\",\"id\":\"" + i + "\",\"operation\":\"Create\",\"lastUpdated\":\"2025-04-10T11:00:00-07:00\"}]}}]}";
+            webhookStorageService.addWebhook(payload);
         }
         
-        // Act
-        List<WebhooksCloudEvents> events = webhookStorageService.getRecentCloudEvents();
-        
-        // Assert - Most recent (test-2) should be first
+        List<WebhookEvent> events = webhookStorageService.getRecentWebhooks();
         assertEquals(3, events.size());
-        assertEquals("test-2", events.get(0).getId());
-        assertEquals("test-0", events.get(2).getId());
+        assertEquals("2", events.get(0).getEntityId());
+        assertEquals("0", events.get(2).getEntityId());
     }
     
     @Test
     public void testGetTotalEventCount_EmptyStorage() {
-        // Act & Assert
         assertEquals(0, webhookStorageService.getTotalEventCount());
     }
     
     @Test
     public void testGetMaxCapacity() {
-        // Act & Assert
         assertEquals(50, webhookStorageService.getMaxCapacity());
     }
     
     @Test
-    public void testConcurrentAccess() throws InterruptedException {
-        // Arrange
-        AtomicInteger counter = new AtomicInteger(0);
-        when(cloudEventsParser.parseCloudEvents(anyString())).thenAnswer(inv ->
-            createMockEventsWithId("test-" + counter.getAndIncrement()));
+    public void testGetEventTypeBreakdown() {
+        webhookStorageService.addWebhook(MULTI_ENTITY_PAYLOAD);
         
-        // Act - Simulate concurrent webhook additions
+        java.util.Map<String, Integer> breakdown = webhookStorageService.getEventTypeBreakdown();
+        assertNotNull(breakdown);
+        assertEquals(1, breakdown.getOrDefault("Customer.Create", 0));
+        assertEquals(1, breakdown.getOrDefault("Invoice.Update", 0));
+        assertEquals(1, breakdown.getOrDefault("Vendor.Delete", 0));
+    }
+    
+    @Test
+    public void testGetEventByIndex() {
+        webhookStorageService.addWebhook(VALID_PAYLOAD);
+        
+        WebhookEvent event = webhookStorageService.getEventByIndex(0);
+        assertNotNull(event);
+        assertEquals("Customer", event.getEntityName());
+        
+        assertNull(webhookStorageService.getEventByIndex(99));
+        assertNull(webhookStorageService.getEventByIndex(-1));
+    }
+    
+    @Test
+    public void testConcurrentAccess() throws InterruptedException {
         Thread thread1 = new Thread(() -> {
             for (int i = 0; i < 10; i++) {
-                webhookStorageService.addWebhook("[{\"id\":\"thread1-" + i + "\"}]");
+                String payload = "{\"eventNotifications\":[{\"realmId\":\"realm-t1\",\"dataChangeEvent\":{\"entities\":[{\"name\":\"Customer\",\"id\":\"t1-" + i + "\",\"operation\":\"Create\",\"lastUpdated\":\"2025-04-10T11:00:00-07:00\"}]}}]}";
+                webhookStorageService.addWebhook(payload);
             }
         });
         
         Thread thread2 = new Thread(() -> {
             for (int i = 0; i < 10; i++) {
-                webhookStorageService.addWebhook("[{\"id\":\"thread2-" + i + "\"}]");
+                String payload = "{\"eventNotifications\":[{\"realmId\":\"realm-t2\",\"dataChangeEvent\":{\"entities\":[{\"name\":\"Vendor\",\"id\":\"t2-" + i + "\",\"operation\":\"Update\",\"lastUpdated\":\"2025-04-10T11:00:00-07:00\"}]}}]}";
+                webhookStorageService.addWebhook(payload);
             }
         });
         
@@ -246,31 +170,6 @@ public class WebhookStorageServiceTest {
         thread1.join();
         thread2.join();
         
-        // Assert - Should have exactly 20 events without corruption
         assertEquals(20, webhookStorageService.getTotalEventCount());
-    }
-    
-    // Helper methods
-    
-    private List<WebhooksCloudEvents> createMockEvents(int count) {
-        List<WebhooksCloudEvents> events = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            WebhooksCloudEvents event = mock(WebhooksCloudEvents.class);
-            when(event.getId()).thenReturn("test-id-" + i);
-            when(event.getType()).thenReturn("qbo.customer.created.v1");
-            when(event.getIntuitEntityId()).thenReturn(String.valueOf(i));
-            when(event.getIntuitAccountId()).thenReturn("123456");
-            events.add(event);
-        }
-        return events;
-    }
-    
-    private List<WebhooksCloudEvents> createMockEventsWithId(String id) {
-        List<WebhooksCloudEvents> events = new ArrayList<>();
-        WebhooksCloudEvents event = mock(WebhooksCloudEvents.class);
-        when(event.getId()).thenReturn(id);
-        when(event.getType()).thenReturn("qbo.customer.created.v1");
-        events.add(event);
-        return events;
     }
 }

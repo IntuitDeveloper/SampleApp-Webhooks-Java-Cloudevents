@@ -28,9 +28,9 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.intuit.developer.sampleapp.webhooks.config.QuickBooksConfig;
 import com.intuit.developer.sampleapp.webhooks.controllers.WebhooksViewController;
+import com.intuit.developer.sampleapp.webhooks.domain.WebhookEvent;
 import com.intuit.developer.sampleapp.webhooks.service.QuickBooksOAuthService;
 import com.intuit.developer.sampleapp.webhooks.service.WebhookStorageService;
-import com.intuit.ipp.data.WebhooksCloudEvents;
 
 import jakarta.servlet.http.HttpSession;
 
@@ -284,10 +284,10 @@ public class WebhooksViewControllerTest {
         when(config.getEnvironment()).thenReturn("sandbox");
         when(webhookStorageService.getTotalEventCount()).thenReturn(5);
         
-        List<WebhooksCloudEvents> mockEvents = new ArrayList<>();
-        WebhooksCloudEvents event = mock(WebhooksCloudEvents.class);
+        List<WebhookEvent> mockEvents = new ArrayList<>();
+        WebhookEvent event = mock(WebhookEvent.class);
         mockEvents.add(event);
-        when(webhookStorageService.getRecentCloudEvents()).thenReturn(mockEvents);
+        when(webhookStorageService.getRecentWebhooks()).thenReturn(mockEvents);
         
         // Act
         String result = controller.dashboard(model, session);
@@ -298,7 +298,7 @@ public class WebhooksViewControllerTest {
         verify(model).addAttribute("environment", "sandbox");
         verify(model).addAttribute("webhookCount", 5);
         verify(model).addAttribute("todayCount", 5);
-        verify(model).addAttribute("cloudEvents", mockEvents);
+        verify(model).addAttribute("webhookEvents", mockEvents);
     }
     
     @Test
@@ -335,7 +335,7 @@ public class WebhooksViewControllerTest {
         when(session.getAttribute("realm_id")).thenReturn("realm-123");
         when(config.getEnvironment()).thenReturn("production");
         when(webhookStorageService.getTotalEventCount()).thenReturn(0);
-        when(webhookStorageService.getRecentCloudEvents()).thenReturn(new ArrayList<>());
+        when(webhookStorageService.getRecentWebhooks()).thenReturn(new ArrayList<>());
         
         // Act
         String result = controller.dashboard(model, session);
@@ -343,7 +343,7 @@ public class WebhooksViewControllerTest {
         // Assert
         assertEquals("dashboard", result);
         verify(model).addAttribute("webhookCount", 0);
-        verify(model).addAttribute(eq("cloudEvents"), anyList());
+        verify(model).addAttribute(eq("webhookEvents"), anyList());
     }
     
     @Test
@@ -353,11 +353,11 @@ public class WebhooksViewControllerTest {
         when(config.getEnvironment()).thenReturn("sandbox");
         when(webhookStorageService.getTotalEventCount()).thenReturn(25);
         
-        List<WebhooksCloudEvents> mockEvents = new ArrayList<>();
+        List<WebhookEvent> mockEvents = new ArrayList<>();
         for (int i = 0; i < 25; i++) {
-            mockEvents.add(mock(WebhooksCloudEvents.class));
+            mockEvents.add(mock(WebhookEvent.class));
         }
-        when(webhookStorageService.getRecentCloudEvents()).thenReturn(mockEvents);
+        when(webhookStorageService.getRecentWebhooks()).thenReturn(mockEvents);
         
         // Act
         String result = controller.dashboard(model, session);
@@ -365,6 +365,6 @@ public class WebhooksViewControllerTest {
         // Assert
         assertEquals("dashboard", result);
         verify(model).addAttribute("webhookCount", 25);
-        verify(model).addAttribute("cloudEvents", mockEvents);
+        verify(model).addAttribute("webhookEvents", mockEvents);
     }
 }

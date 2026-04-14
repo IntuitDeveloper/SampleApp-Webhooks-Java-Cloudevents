@@ -102,7 +102,7 @@ public class WebhooksControllerTest {
 	@Test
 	public void webhooksWithMissingSignature() throws Exception {
 		// Missing signature should return 403
-		String payload = "[{\"id\":\"test\"}]";
+		String payload = "{\"eventNotifications\":[]}";
 		mockMvc.perform(post("/webhooks")
 		.contentType(APPLICATION_JSON_UTF8)
 		.content(payload))
@@ -121,7 +121,7 @@ public class WebhooksControllerTest {
 	@Test
 	public void webhooksWithInvalidSignature() throws Exception {
 		// Mock invalid signature validation
-		String payload = "[{\"specversion\":\"1.0\"}]";
+		String payload = "{\"eventNotifications\":[]}";
 		Mockito.when(webhooksServiceMock.verifyPayload(Mockito.anyString(), Mockito.anyString())).thenReturn(false);
 		
 		mockMvc.perform(post("/webhooks")
@@ -134,7 +134,7 @@ public class WebhooksControllerTest {
 	@Test
 	public void webhooksWithStorageServiceException() throws Exception {
 		// Mock storage service throwing exception
-		String payload = "[{\"specversion\":\"1.0\"}]";
+		String payload = "{\"eventNotifications\":[{\"realmId\":\"123\"}]}";
 		Mockito.doThrow(new RuntimeException("Storage failed"))
 			.when(webhookStorageServiceMock).addWebhook(Mockito.anyString());
 		
@@ -142,12 +142,12 @@ public class WebhooksControllerTest {
 		.contentType(APPLICATION_JSON_UTF8)
 		.content(convertObjectToJsonBytes(payload))
 		.header("intuit-signature", "1234"))
-		.andExpect(status().isOk());
+		.andExpect(status().isInternalServerError());
 	}
 	
 	@Test
-	public void webhooksWithValidCloudEventsPayload() throws Exception {
-		String payload = "[{\"specversion\":\"1.0\",\"id\":\"test-123\",\"type\":\"qbo.customer.created.v1\"}]";
+	public void webhooksWithValidLegacyPayload() throws Exception {
+		String payload = "{\"eventNotifications\":[{\"realmId\":\"9341455322581846\",\"dataChangeEvent\":{\"entities\":[{\"name\":\"Customer\",\"id\":\"42\",\"operation\":\"Create\",\"lastUpdated\":\"2025-04-10T11:00:00-07:00\"}]}}]}";
 		
 		mockMvc.perform(post("/webhooks")
 		.contentType(APPLICATION_JSON_UTF8)
@@ -168,42 +168,6 @@ public class WebhooksControllerTest {
 		.andExpect(status().isOk());
 	}
 	
-	@Test
-	public void webhooksWithCloudEventsContentType() throws Exception {
-		String payload = "[{\"specversion\":\"1.0\",\"id\":\"test-456\",\"type\":\"qbo.customer.created.v1\",\"intuitentityid\":\"42\",\"intuitaccountid\":\"123456\"}]";
-		
-		mockMvc.perform(post("/webhooks")
-		.contentType("application/cloudevents+json")
-		.content(payload)
-		.header("intuit-signature", "1234"))
-		.andExpect(status().isOk());
-		
-		Mockito.verify(webhookStorageServiceMock, Mockito.times(1)).addWebhook(payload);
-	}
-	
-	@Test
-	public void webhooksWithMalformedJsonBody() throws Exception {
-		String payload = "[{broken json";
-		
-		mockMvc.perform(post("/webhooks")
-		.contentType(APPLICATION_JSON_UTF8)
-		.content(payload)
-		.header("intuit-signature", "1234"))
-		.andExpect(status().isOk());
-	}
-	
-	@Test
-	public void webhooksWithUnknownEventType() throws Exception {
-		String payload = "[{\"specversion\":\"1.0\",\"id\":\"test-999\",\"type\":\"qbo.unknown.entity.v1\",\"intuitentityid\":\"99\",\"intuitaccountid\":\"123456\"}]";
-		
-		mockMvc.perform(post("/webhooks")
-		.contentType(APPLICATION_JSON_UTF8)
-		.content(payload)
-		.header("intuit-signature", "1234"))
-		.andExpect(status().isOk());
-		
-		Mockito.verify(webhookStorageServiceMock, Mockito.times(1)).addWebhook(payload);
-	}
 
 	public  byte[] convertObjectToJsonBytes(Object object) throws IOException {
         ObjectMapper mapper = new ObjectMapper();

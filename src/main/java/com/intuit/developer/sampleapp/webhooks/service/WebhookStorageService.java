@@ -2,31 +2,29 @@ package com.intuit.developer.sampleapp.webhooks.service;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.intuit.ipp.data.WebhooksCloudEvents;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.intuit.developer.sampleapp.webhooks.domain.WebhookEvent;
 import com.intuit.ipp.util.Logger;
 
 /**
- * Service for storing and retrieving CloudEvents webhooks for dashboard display.
+ * Service for storing and retrieving webhook events for dashboard display.
  * 
- * <p>This service provides in-memory storage of incoming CloudEvents from QuickBooks.
+ * <p>This service provides in-memory storage of incoming webhook notifications from QuickBooks.
  * It maintains a thread-safe collection of recent webhook events with a configurable
  * maximum capacity. When the limit is reached, the oldest events are automatically removed.</p>
  * 
  * <p><strong>Important:</strong> This implementation uses in-memory storage for demo purposes.
  * In a production environment, webhooks should be persisted to a database for durability,
  * analytics, and audit trails.</p>
- * 
- * <p>Thread-safety: All public methods are synchronized to prevent concurrent modification
- * issues when webhooks are received from multiple threads.</p>
  * 
  * @author Nate O'Neal
  * @version 1.0
@@ -36,25 +34,13 @@ import com.intuit.ipp.util.Logger;
 public class WebhookStorageService {
     
     private static final org.slf4j.Logger LOG = Logger.getLogger();
-    private static final int MAX_WEBHOOKS = 50; // Maximum number of webhooks to retain
+    private static final int MAX_WEBHOOKS = 50;
     
-    private final List<WebhooksCloudEvents> recentCloudEvents = Collections.synchronizedList(new ArrayList<>());
-    private final Set<String> processedEventIds = Collections.synchronizedSet(new HashSet<>());
-    
-    @Autowired
-    private CloudEventsWebhookParser cloudEventsParser;
+    private final List<WebhookEvent> recentWebhooks = Collections.synchronizedList(new ArrayList<>());
     
     /**
      * Adds a webhook event to storage for dashboard display.
-     * 
-     * <p>This method parses the webhook payload, extracts entity change events,
-     * and stores them for display on the dashboard. Multiple entities within a
-     * single webhook notification are stored as separate events.</p>
-     * 
-     * <p>The storage maintains a FIFO queue with a maximum capacity of {@value MAX_WEBHOOKS}
-     * events. When the limit is reached, the oldest event is automatically removed.</p>
-     * 
-     * <p>This method is thread-safe and can be called concurrently from multiple threads.</p>
+     * Parses the legacy eventNotifications payload and extracts entity changes.
      * 
      * @param payload The raw webhook payload JSON string from QuickBooks
      * @throws IllegalArgumentException if payload is null or empty
@@ -66,12 +52,48 @@ public class WebhookStorageService {
         }
         
         try {
-            // Process as CloudEvents format
-            LOG.info("Processing CloudEvents format webhook");
-            processCloudEventsWebhook(payload);
+            JsonObject root = JsonParser.parseString(payload).getAsJsonObject();
+            JsonArray notifications = root.getAsJsonArray("eventNotifications");
+            
+            if (notifications == null || notifications.isEmpty()) {
+                LOG.warn("Webhook contained no event notifications");
+                return;
+            }
+            
+            for (JsonElement notifElement : notifications) {
+                JsonObject notification = notifElement.getAsJsonObject();
+                String realmId = notification.get("realmId").getAsString();
+                
+                JsonObject dataChangeEvent = notification.getAsJsonObject("dataChangeEvent");
+                JsonArray entities = dataChangeEvent.getAsJsonArray("entities");
+                
+                for (JsonElement entityElement : entities) {
+                    JsonObject entity = entityElement.getAsJsonObject();
+                    
+                    WebhookEvent event = new WebhookEvent(
+                        realmId,
+                        entity.get("name").getAsString(),
+                        entity.get("id").getAsString(),
+                        entity.get("operation").getAsString(),
+                        entity.get("lastUpdated").getAsString()
+                    );
+                    
+                    // Add to beginning of list (most recent first)
+                    recentWebhooks.add(0, event);
+                    
+                    // Maintain maximum size limit
+                    if (recentWebhooks.size() > MAX_WEBHOOKS) {
+                        recentWebhooks.remove(recentWebhooks.size() - 1);
+                    }
+                    
+                    LOG.info("Stored webhook event: realmId={}, entity={}, id={}, operation={}", 
+                        realmId, event.getEntityName(), event.getEntityId(), event.getOperation());
+                }
+            }
+            
+            LOG.info("Successfully processed webhook with {} notification(s)", notifications.size());
             
         } catch (IllegalArgumentException e) {
-            // Re-throw validation exceptions
             throw e;
         } catch (Exception e) {
             LOG.error("Failed to parse and store webhook: {}", e.getMessage(), e);
@@ -80,109 +102,62 @@ public class WebhookStorageService {
     }
     
     /**
-     * Process CloudEvents format webhook payload using SDK
-     * Stores pure SDK WebhooksCloudEvents objects
-     */
-    private void processCloudEventsWebhook(String payload) {
-        List<WebhooksCloudEvents> events = cloudEventsParser.parseCloudEvents(payload);
-        
-        if (events.isEmpty()) {
-            LOG.warn("CloudEvents webhook contained no processable events");
-            return;
-        }
-        
-        // Add all CloudEvents to storage
-        for (WebhooksCloudEvents event : events) {
-            String eventId = event.getId();
-
-            if (eventId != null && processedEventIds.contains(eventId)) {
-                LOG.info("Skipping duplicate CloudEvent: id={} (already processed)", eventId);
-                continue;
-            }
-
-            if (eventId != null) {
-                processedEventIds.add(eventId);
-            }
-
-            // Add to beginning of list (most recent first)
-            recentCloudEvents.add(0, event);
-            
-            // Maintain maximum size limit
-            if (recentCloudEvents.size() > MAX_WEBHOOKS) {
-                recentCloudEvents.remove(recentCloudEvents.size() - 1);
-                LOG.debug("Removed oldest CloudEvent to maintain size limit of {}", MAX_WEBHOOKS);
-            }
-            
-            LOG.info("Stored CloudEvent: id={}, type={}, entityId={}, accountId={}", 
-                event.getId(), event.getType(), event.getIntuitEntityId(), event.getIntuitAccountId());
-        }
-        
-        LOG.info("Successfully processed CloudEvents webhook with {} event(s)", events.size());
-    }
-    
-    /**
-     * Clears all stored CloudEvents from memory.
+     * Clears all stored webhooks from memory.
      */
     public synchronized void clearWebhooks() {
-        int previousSize = recentCloudEvents.size();
-        recentCloudEvents.clear();
-        processedEventIds.clear();
-        LOG.info("Cleared {} CloudEvent(s) from storage", previousSize);
+        int previousSize = recentWebhooks.size();
+        recentWebhooks.clear();
+        LOG.info("Cleared {} webhook(s) from storage", previousSize);
     }
     
     /**
      * Returns the maximum number of webhook events that can be stored.
-     * 
-     * @return Maximum webhook storage capacity
      */
     public int getMaxCapacity() {
         return MAX_WEBHOOKS;
     }
     
     /**
-     * Retrieves all recent CloudEvents for dashboard display.
+     * Retrieves all recent webhooks for dashboard display.
      * 
-     * @return List of SDK WebhooksCloudEvents (most recent first)
+     * @return List of WebhookEvent objects (most recent first)
      */
-    public synchronized List<WebhooksCloudEvents> getRecentCloudEvents() {
-        return Collections.unmodifiableList(new ArrayList<>(recentCloudEvents));
+    public synchronized List<WebhookEvent> getRecentWebhooks() {
+        return Collections.unmodifiableList(new ArrayList<>(recentWebhooks));
     }
     
     /**
-     * Returns total count of stored CloudEvents 
+     * Returns total count of stored webhook events.
      */
     public synchronized int getTotalEventCount() {
-        return recentCloudEvents.size();
+        return recentWebhooks.size();
     }
     
     /**
      * Gets event type breakdown with counts for dashboard display.
-     * Returns a map of event types to their counts, ordered by count (descending).
      * 
-     * @return Map of event type to count
+     * @return Map of entity operation (e.g. "Customer.Create") to count
      */
     public synchronized Map<String, Integer> getEventTypeBreakdown() {
-        Map<String, Integer> eventTypeCounts = new LinkedHashMap<>();
+        Map<String, Integer> operationCounts = new LinkedHashMap<>();
         
-        for (WebhooksCloudEvents event : recentCloudEvents) {
-            String eventType = event.getType();
-            if (eventType != null) {
-                eventTypeCounts.put(eventType, eventTypeCounts.getOrDefault(eventType, 0) + 1);
-            }
+        for (WebhookEvent event : recentWebhooks) {
+            String key = event.getEntityName() + "." + event.getOperation();
+            operationCounts.put(key, operationCounts.getOrDefault(key, 0) + 1);
         }
         
-        return eventTypeCounts;
+        return operationCounts;
     }
     
     /**
-     * Gets a specific CloudEvent by index for detailed view.
+     * Gets a specific webhook event by index for detailed view.
      * 
      * @param index The index of the event (0-based, most recent first)
-     * @return The CloudEvent at the specified index, or null if index is out of bounds
+     * @return The WebhookEvent at the specified index, or null if index is out of bounds
      */
-    public synchronized WebhooksCloudEvents getEventByIndex(int index) {
-        if (index >= 0 && index < recentCloudEvents.size()) {
-            return recentCloudEvents.get(index);
+    public synchronized WebhookEvent getEventByIndex(int index) {
+        if (index >= 0 && index < recentWebhooks.size()) {
+            return recentWebhooks.get(index);
         }
         return null;
     }

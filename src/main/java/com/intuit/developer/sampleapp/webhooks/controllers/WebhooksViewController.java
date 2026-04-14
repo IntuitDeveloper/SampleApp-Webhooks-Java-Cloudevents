@@ -205,11 +205,11 @@ public class WebhooksViewController {
         java.util.Map<String, Integer> eventTypeBreakdown = webhookStorageService.getEventTypeBreakdown();
         model.addAttribute("eventTypeBreakdown", eventTypeBreakdown);
         
-        // Add recent CloudEvents - using SDK WebhooksCloudEvents directly
-        java.util.List<com.intuit.ipp.data.WebhooksCloudEvents> recentCloudEvents = 
-            webhookStorageService.getRecentCloudEvents();
-        logger.info("Dashboard - Retrieved {} CloudEvents from storage", recentCloudEvents.size());
-        model.addAttribute("cloudEvents", recentCloudEvents);
+        // Add recent webhooks for dashboard display
+        java.util.List<com.intuit.developer.sampleapp.webhooks.domain.WebhookEvent> recentWebhooks = 
+            webhookStorageService.getRecentWebhooks();
+        logger.info("Dashboard - Retrieved {} webhooks from storage", recentWebhooks.size());
+        model.addAttribute("webhookEvents", recentWebhooks);
         
         return "dashboard";
     }
@@ -228,26 +228,26 @@ public class WebhooksViewController {
         }
         
         // Get the specific event by index
-        com.intuit.ipp.data.WebhooksCloudEvents cloudEvent = webhookStorageService.getEventByIndex(index);
+        com.intuit.developer.sampleapp.webhooks.domain.WebhookEvent webhookEvent = webhookStorageService.getEventByIndex(index);
         
-        if (cloudEvent == null) {
+        if (webhookEvent == null) {
             logger.warn("Event not found for index: {}", index);
             return "redirect:/dashboard?error=Event not found";
         }
         
         // Add event data to model
-        model.addAttribute("cloudEvent", cloudEvent);
+        model.addAttribute("webhookEvent", webhookEvent);
         model.addAttribute("eventIndex", index);
         model.addAttribute("realmId", realmId);
         model.addAttribute("environment", config.getEnvironment());
         
         // If this is a customer event, fetch current customer data
-        if (cloudEvent.getType() != null && cloudEvent.getType().contains("customer")) {
+        if ("Customer".equalsIgnoreCase(webhookEvent.getEntityName())) {
             try {
-                Customer customer = fetchCustomerData(cloudEvent.getIntuitEntityId(), session);
+                Customer customer = fetchCustomerData(webhookEvent.getEntityId(), session);
                 if (customer != null) {
                     model.addAttribute("customerData", customer);
-                    logger.info("Fetched current customer data for ID: {}", cloudEvent.getIntuitEntityId());
+                    logger.info("Fetched current customer data for ID: {}", webhookEvent.getEntityId());
                 }
             } catch (Exception e) {
                 logger.warn("Could not fetch customer data: {}", e.getMessage());
@@ -256,12 +256,12 @@ public class WebhooksViewController {
         }
         
         // If this is a vendor event, fetch current vendor data
-        if (cloudEvent.getType() != null && cloudEvent.getType().contains("vendor")) {
+        if ("Vendor".equalsIgnoreCase(webhookEvent.getEntityName())) {
             try {
-                Vendor vendor = fetchVendorData(cloudEvent.getIntuitEntityId(), session);
+                Vendor vendor = fetchVendorData(webhookEvent.getEntityId(), session);
                 if (vendor != null) {
                     model.addAttribute("vendorData", vendor);
-                    logger.info("Fetched current vendor data for ID: {}", cloudEvent.getIntuitEntityId());
+                    logger.info("Fetched current vendor data for ID: {}", webhookEvent.getEntityId());
                 }
             } catch (Exception e) {
                 logger.warn("Could not fetch vendor data: {}", e.getMessage());
@@ -270,12 +270,12 @@ public class WebhooksViewController {
         }
         
         // If this is an invoice event, fetch current invoice data
-        if (cloudEvent.getType() != null && cloudEvent.getType().contains("invoice")) {
+        if ("Invoice".equalsIgnoreCase(webhookEvent.getEntityName())) {
             try {
-                Invoice invoice = fetchInvoiceData(cloudEvent.getIntuitEntityId(), session);
+                Invoice invoice = fetchInvoiceData(webhookEvent.getEntityId(), session);
                 if (invoice != null) {
                     model.addAttribute("invoiceData", invoice);
-                    logger.info("Fetched current invoice data for ID: {}", cloudEvent.getIntuitEntityId());
+                    logger.info("Fetched current invoice data for ID: {}", webhookEvent.getEntityId());
                 }
             } catch (Exception e) {
                 logger.warn("Could not fetch invoice data: {}", e.getMessage());
@@ -284,12 +284,12 @@ public class WebhooksViewController {
         }
         
         // If this is a payment event, fetch current payment data
-        if (cloudEvent.getType() != null && cloudEvent.getType().contains("payment")) {
+        if ("Payment".equalsIgnoreCase(webhookEvent.getEntityName())) {
             try {
-                Payment payment = fetchPaymentData(cloudEvent.getIntuitEntityId(), session);
+                Payment payment = fetchPaymentData(webhookEvent.getEntityId(), session);
                 if (payment != null) {
                     model.addAttribute("paymentData", payment);
-                    logger.info("Fetched current payment data for ID: {}", cloudEvent.getIntuitEntityId());
+                    logger.info("Fetched current payment data for ID: {}", webhookEvent.getEntityId());
                 }
             } catch (Exception e) {
                 logger.warn("Could not fetch payment data: {}", e.getMessage());
@@ -298,12 +298,12 @@ public class WebhooksViewController {
         }
         
         // If this is a bill event, fetch current bill data
-        if (cloudEvent.getType() != null && cloudEvent.getType().contains("bill")) {
+        if ("Bill".equalsIgnoreCase(webhookEvent.getEntityName())) {
             try {
-                Bill bill = fetchBillData(cloudEvent.getIntuitEntityId(), session);
+                Bill bill = fetchBillData(webhookEvent.getEntityId(), session);
                 if (bill != null) {
                     model.addAttribute("billData", bill);
-                    logger.info("Fetched current bill data for ID: {}", cloudEvent.getIntuitEntityId());
+                    logger.info("Fetched current bill data for ID: {}", webhookEvent.getEntityId());
                 }
             } catch (Exception e) {
                 logger.warn("Could not fetch bill data: {}", e.getMessage());
@@ -312,12 +312,12 @@ public class WebhooksViewController {
         }
         
         // If this is a journal entry event, fetch current journal entry data
-        if (cloudEvent.getType() != null && cloudEvent.getType().contains("journalentry")) {
+        if ("JournalEntry".equalsIgnoreCase(webhookEvent.getEntityName())) {
             try {
-                JournalEntry journalEntry = fetchJournalEntryData(cloudEvent.getIntuitEntityId(), session);
+                JournalEntry journalEntry = fetchJournalEntryData(webhookEvent.getEntityId(), session);
                 if (journalEntry != null) {
                     model.addAttribute("journalEntryData", journalEntry);
-                    logger.info("Fetched current journal entry data for ID: {}", cloudEvent.getIntuitEntityId());
+                    logger.info("Fetched current journal entry data for ID: {}", webhookEvent.getEntityId());
                 }
             } catch (Exception e) {
                 logger.warn("Could not fetch journal entry data: {}", e.getMessage());
@@ -326,12 +326,12 @@ public class WebhooksViewController {
         }
         
         // If this is a purchase event, fetch current purchase data
-        if (cloudEvent.getType() != null && cloudEvent.getType().contains("purchase")) {
+        if ("Purchase".equalsIgnoreCase(webhookEvent.getEntityName())) {
             try {
-                Purchase purchase = fetchPurchaseData(cloudEvent.getIntuitEntityId(), session);
+                Purchase purchase = fetchPurchaseData(webhookEvent.getEntityId(), session);
                 if (purchase != null) {
                     model.addAttribute("purchaseData", purchase);
-                    logger.info("Fetched current purchase data for ID: {}", cloudEvent.getIntuitEntityId());
+                    logger.info("Fetched current purchase data for ID: {}", webhookEvent.getEntityId());
                 }
             } catch (Exception e) {
                 logger.warn("Could not fetch purchase data: {}", e.getMessage());
@@ -339,7 +339,8 @@ public class WebhooksViewController {
             }
         }
         
-        logger.info("Displaying event details for: id={}, type={}", cloudEvent.getId(), cloudEvent.getType());
+        logger.info("Displaying event details for: entity={}, id={}, operation={}", 
+            webhookEvent.getEntityName(), webhookEvent.getEntityId(), webhookEvent.getOperation());
         
         return "event-details";
     }
